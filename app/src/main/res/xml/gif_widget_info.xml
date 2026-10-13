@@ -6,8 +6,11 @@
     targetCellWidth/Height = default size on Android 12+.
     minResizeWidth/Height = smallest size when resizing (40dp is about 1x1).
     No max size is set, so it can grow to fill the whole screen.
+    configure = the screen that opens when the widget is added.
+    widgetFeatures="reconfigurable" = Android 12+ launchers may offer "reconfigure" on long-press.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="com.octorice.wuxiagifwidget.config.GifConfigActivity"
     android:description="@string/widget_description"
     android:initialLayout="@layout/widget_gif"
     android:minWidth="110dp"
@@ -20,4 +23,5 @@
     android:targetCellWidth="2"
     android:targetCellHeight="2"
     android:updatePeriodMillis="0"
-    android:widgetCategory="home_screen" />
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable" />

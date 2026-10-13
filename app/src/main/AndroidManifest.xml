@@ -23,6 +23,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Opens when a widget is added, so you can pick its GIF. -->
+        <activity
+            android:name=".config.GifConfigActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.WuxiaGIFWidget">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
         <!-- The home screen widget. The system sends it update broadcasts. -->
         <receiver
             android:name=".widget.GifWidgetProvider"

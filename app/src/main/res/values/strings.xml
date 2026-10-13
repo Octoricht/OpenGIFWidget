@@ -3,4 +3,5 @@
     <string name="widget_name">Wuxia GIF</string>
     <string name="widget_description">Plays an animated GIF on your home screen</string>
     <string name="widget_image_description">Animated GIF</string>
+    <string name="widget_tap_to_choose">Tap to choose a GIF</string>
 </resources>
