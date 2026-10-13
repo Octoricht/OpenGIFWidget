@@ -33,6 +33,11 @@ object GifStorage {
     fun frameFile(context: Context, appWidgetId: Int, version: Long, index: Int): File =
         File(framesDir(context, appWidgetId, version), FrameExtractor.frameFileName(index))
 
+    /** How much space one widget uses: its GIF copy plus all its frames. */
+    fun widgetStorageBytes(context: Context, appWidgetId: Int): Long =
+        gifFile(context, appWidgetId).length() +
+            widgetFramesDir(context, appWidgetId).walk().filter { it.isFile }.sumOf { it.length() }
+
     /** Deletes everything stored for one widget: its GIF copy and all its frames. */
     fun deleteWidgetFiles(context: Context, appWidgetId: Int) {
         File(File(context.filesDir, "gifs"), "$appWidgetId.gif").delete()
