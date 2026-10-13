@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">WuxiaGIFWidget</string>
     <!-- Invisible (zero-width space) so the launcher shows no title under the widgets. -->
-    <string name="widget_name">​</string>
+    <string name="widget_name">\u200B</string>
     <string name="widget_description">Plays an animated GIF on your home screen</string>
     <string name="widget_image_description">Animated GIF</string>
     <string name="widget_tap_to_choose">Tap to choose a GIF</string>
