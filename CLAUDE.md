@@ -23,4 +23,4 @@ RemoteViews can't play GIFs directly, so:
 - **Don't add libraries/dependencies without asking first.**
 - The user is learning: after each change, explain what changed and why, in simple terms.
 - Work in small steps. After each step, explain how to test it on the phone.
-- Git has a GitHub remote. **Only commit and push when the user says so.**
+- Git has a GitHub remote (`master` branch, account Octoricht). **After each completed step, commit and push** with a message describing what was done. Don't commit at other times unless the user asks.
