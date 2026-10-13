@@ -53,6 +53,10 @@ class GifWidgetProvider : AppWidgetProvider() {
                     ScaleMode.FIT -> R.layout.widget_frame_fit
                     ScaleMode.FILL -> R.layout.widget_frame_fill
                 }
+                // The launcher often re-applies an update on top of the widget it already shows
+                // instead of rebuilding it, so clear the old frames first. Without this, every
+                // update (Fit/Fill switch, new GIF, reinstall) piled another full set of frames on top.
+                views.removeAllViews(R.id.widget_flipper)
                 // Add one ImageView per frame to the ViewFlipper. We only send the frame's
                 // address (Uri); the launcher loads the PNG itself through FrameProvider.
                 for (index in 0 until frames.frameCount) {
