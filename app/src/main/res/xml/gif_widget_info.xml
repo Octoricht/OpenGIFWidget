@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Tells the launcher about the widget: default size, how small it can shrink,
+    that it can be resized both ways, and which layout to show first.
+    minWidth/minHeight = default size on Android 11 and older (110dp is about 2x2 cells).
+    targetCellWidth/Height = default size on Android 12+.
+    minResizeWidth/Height = smallest size when resizing (40dp is about 1x1).
+    No max size is set, so it can grow to fill the whole screen.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_description"
+    android:initialLayout="@layout/widget_gif"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="40dp"
+    android:minResizeHeight="40dp"
+    android:previewImage="@drawable/widget_placeholder"
+    android:previewLayout="@layout/widget_gif"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

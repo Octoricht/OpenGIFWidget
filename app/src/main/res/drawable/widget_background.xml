@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dark rounded rectangle, so you can see the widget's edges while resizing. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#CC202020" />
+    <corners android:radius="16dp" />
+</shape>
