@@ -22,11 +22,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Card
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,6 +45,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.octorice.wuxiagifwidget.data.GifStorage
+import com.octorice.wuxiagifwidget.data.ScaleMode
 import com.octorice.wuxiagifwidget.data.StoredGif
 import com.octorice.wuxiagifwidget.data.WidgetStore
 import com.octorice.wuxiagifwidget.gif.FrameExtractor
@@ -78,6 +83,8 @@ class GifConfigActivity : ComponentActivity() {
             WuxiaGIFWidgetTheme {
                 ConfigScreen(
                     initialGif = WidgetStore.getGif(this, appWidgetId),
+                    initialScaleMode = WidgetStore.getScaleMode(this, appWidgetId),
+                    onScaleModeChange = ::changeScaleMode,
                     importGif = ::importGif,
                     loadThumbnails = ::loadThumbnails,
                     onDone = ::finishWithSuccess
@@ -122,6 +129,12 @@ class GifConfigActivity : ComponentActivity() {
             }
         }
 
+    /** Saves Fit/Fill for this widget and redraws it right away. */
+    private fun changeScaleMode(mode: ScaleMode) {
+        WidgetStore.saveScaleMode(this, appWidgetId, mode)
+        GifWidgetProvider.updateWidget(this, AppWidgetManager.getInstance(this), appWidgetId)
+    }
+
     private fun finishWithSuccess() {
         setResult(RESULT_OK, resultIntent())
         finish()
@@ -131,9 +144,12 @@ class GifConfigActivity : ComponentActivity() {
         Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ConfigScreen(
     initialGif: StoredGif?,
+    initialScaleMode: ScaleMode,
+    onScaleModeChange: (ScaleMode) -> Unit,
     importGif: suspend (Uri, (Int, Int) -> Unit) -> StoredGif,
     loadThumbnails: suspend (StoredGif) -> List<ImageBitmap>,
     onDone: () -> Unit
@@ -141,6 +157,7 @@ private fun ConfigScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var gif by remember { mutableStateOf(initialGif) }
+    var scaleMode by remember { mutableStateOf(initialScaleMode) }
     var busy by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf<Pair<Int, Int>?>(null) } // (done, total) frames
     var error by remember { mutableStateOf<String?>(null) }
@@ -205,6 +222,30 @@ private fun ConfigScreen(
                 enabled = !busy,
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Browse files") }
+
+            // Fit or Fill, saved separately for every widget.
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                ScaleMode.entries.forEachIndexed { index, mode ->
+                    SegmentedButton(
+                        selected = scaleMode == mode,
+                        onClick = {
+                            scaleMode = mode
+                            onScaleModeChange(mode)
+                        },
+                        shape = SegmentedButtonDefaults.itemShape(index, ScaleMode.entries.size)
+                    ) {
+                        Text(if (mode == ScaleMode.FIT) "Fit" else "Fill")
+                    }
+                }
+            }
+            Text(
+                if (scaleMode == ScaleMode.FIT) {
+                    "Fit: shows the whole GIF, with empty space around it if needed."
+                } else {
+                    "Fill: covers the whole widget, cutting off the edges that don't fit."
+                },
+                style = MaterialTheme.typography.bodySmall
+            )
 
             if (busy) {
                 val (done, total) = progress ?: (0 to 0)

@@ -5,12 +5,13 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
-import android.text.format.Formatter
+import android.view.View
 import android.widget.RemoteViews
 import com.octorice.wuxiagifwidget.R
 import com.octorice.wuxiagifwidget.config.GifConfigActivity
-import com.octorice.wuxiagifwidget.data.GifStorage
+import com.octorice.wuxiagifwidget.data.ScaleMode
 import com.octorice.wuxiagifwidget.data.WidgetStore
+import com.octorice.wuxiagifwidget.provider.FrameProvider
 
 /**
  * The home screen widget. Android calls these methods; we answer by sending
@@ -32,24 +33,38 @@ class GifWidgetProvider : AppWidgetProvider() {
         /** Builds the look of one widget and sends it to the launcher. */
         fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
             val views = RemoteViews(context.packageName, R.layout.widget_gif)
-
-            // For now the widget shows the first frame and some info (animation comes later).
             val gif = WidgetStore.getGif(context, appWidgetId)
             val frames = gif?.frames
-            val label = when {
-                gif == null -> context.getString(R.string.widget_tap_to_choose)
-                frames == null -> "${gif.name}\n${Formatter.formatShortFileSize(context, gif.sizeBytes)}"
-                else -> "${gif.name}\n${frames.frameCount} frames · ${frames.intervalMs} ms"
-            }
-            views.setTextViewText(R.id.widget_label, label)
 
-            if (frames != null) {
-                // Temporary: send the first frame as a small bitmap. Bitmaps sent this way must
-                // stay small (there's a ~1 MB limit), which is why Milestone 4 switches to Uris.
-                val firstFrame = GifStorage.frameFile(context, appWidgetId, frames.version, 0)
-                GifStorage.loadFrame(firstFrame, maxSidePx = 256)?.let {
-                    views.setImageViewBitmap(R.id.widget_image, it)
+            if (frames == null) {
+                // No frames yet: show the placeholder and a hint.
+                val label = if (gif == null) {
+                    context.getString(R.string.widget_tap_to_choose)
+                } else {
+                    context.getString(R.string.widget_tap_to_repick)
                 }
+                views.setTextViewText(R.id.widget_label, label)
+            } else {
+                views.setViewVisibility(R.id.widget_placeholder, View.GONE)
+                views.setViewVisibility(R.id.widget_label, View.GONE)
+
+                // Fit and Fill are two tiny layouts that differ only in the ImageView's scaleType.
+                val frameLayout = when (WidgetStore.getScaleMode(context, appWidgetId)) {
+                    ScaleMode.FIT -> R.layout.widget_frame_fit
+                    ScaleMode.FILL -> R.layout.widget_frame_fill
+                }
+                // Add one ImageView per frame to the ViewFlipper. We only send the frame's
+                // address (Uri); the launcher loads the PNG itself through FrameProvider.
+                for (index in 0 until frames.frameCount) {
+                    val frameViews = RemoteViews(context.packageName, frameLayout)
+                    frameViews.setImageViewUri(
+                        R.id.frame_image,
+                        FrameProvider.frameUri(context, appWidgetId, frames.version, index)
+                    )
+                    views.addView(R.id.widget_flipper, frameViews)
+                }
+                // How long each frame stays on screen = the GIF's average frame time.
+                views.setInt(R.id.widget_flipper, "setFlipInterval", frames.intervalMs)
             }
 
             // Tapping the widget opens the GIF picker for this widget.

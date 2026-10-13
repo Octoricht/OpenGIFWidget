@@ -36,6 +36,15 @@
             </intent-filter>
         </activity>
 
+        <!--
+            Serves the PNG frames to the launcher, which draws the widget.
+            exported = other apps (the launcher) can read it. It's read-only and only serves frames.
+        -->
+        <provider
+            android:name=".provider.FrameProvider"
+            android:authorities="${applicationId}.frames"
+            android:exported="true" />
+
         <!-- The home screen widget. The system sends it update broadcasts. -->
         <receiver
             android:name=".widget.GifWidgetProvider"

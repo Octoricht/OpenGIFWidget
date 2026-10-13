@@ -7,15 +7,26 @@
     android:background="@drawable/widget_background"
     android:clipToOutline="true">
 
+    <!--
+        Holds one ImageView per frame and shows them one after another.
+        autoStart = start flipping by itself as soon as the launcher shows it.
+        The flip interval (frame speed) is set from code for each GIF.
+    -->
+    <ViewFlipper
+        android:id="@+id/widget_flipper"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:autoStart="true" />
+
+    <!-- Shown only while no GIF has been chosen yet. -->
     <ImageView
-        android:id="@+id/widget_image"
+        android:id="@+id/widget_placeholder"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:contentDescription="@string/widget_image_description"
         android:scaleType="fitCenter"
         android:src="@drawable/widget_placeholder" />
 
-    <!-- Temporary label: shows the picked GIF's name and size until animation is added. -->
     <TextView
         android:id="@+id/widget_label"
         android:layout_width="match_parent"

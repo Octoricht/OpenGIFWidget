@@ -4,4 +4,5 @@
     <string name="widget_description">Plays an animated GIF on your home screen</string>
     <string name="widget_image_description">Animated GIF</string>
     <string name="widget_tap_to_choose">Tap to choose a GIF</string>
+    <string name="widget_tap_to_repick">Tap and pick this GIF again</string>
 </resources>

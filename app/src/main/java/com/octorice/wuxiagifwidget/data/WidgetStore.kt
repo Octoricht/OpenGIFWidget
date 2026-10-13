@@ -11,6 +11,12 @@ data class StoredGif(
     val frames: FrameSet? = null // null until the frames have been extracted
 )
 
+/** How a GIF is shown when its shape doesn't match the widget's shape. */
+enum class ScaleMode {
+    FIT,  // show the whole GIF, with empty space around it
+    FILL  // cover the whole widget, cutting off the edges
+}
+
 /**
  * Remembers which GIF belongs to which widget, using SharedPreferences
  * (a small key-value file in the app's private storage).
@@ -37,6 +43,15 @@ object WidgetStore {
             null
         }
         return StoredGif(name, prefs.getLong("gif_size_$appWidgetId", 0L), frames)
+    }
+
+    fun getScaleMode(context: Context, appWidgetId: Int): ScaleMode {
+        val name = prefs(context).getString("scale_mode_$appWidgetId", null)
+        return ScaleMode.entries.firstOrNull { it.name == name } ?: ScaleMode.FIT
+    }
+
+    fun saveScaleMode(context: Context, appWidgetId: Int, mode: ScaleMode) {
+        prefs(context).edit { putString("scale_mode_$appWidgetId", mode.name) }
     }
 
     fun saveGif(context: Context, appWidgetId: Int, gif: StoredGif) {
