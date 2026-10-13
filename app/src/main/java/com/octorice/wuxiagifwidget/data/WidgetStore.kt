@@ -45,6 +45,25 @@ object WidgetStore {
         return StoredGif(name, prefs.getLong("gif_size_$appWidgetId", 0L), frames)
     }
 
+    /** Forgets everything about one widget (every key ends with "_<widgetId>"). */
+    fun remove(context: Context, appWidgetId: Int) {
+        removeWhere(context) { it == appWidgetId }
+    }
+
+    /** Forgets every widget that isn't in [activeIds]. */
+    fun removeAllExcept(context: Context, activeIds: Set<Int>) {
+        removeWhere(context) { it !in activeIds }
+    }
+
+    private fun removeWhere(context: Context, shouldRemove: (appWidgetId: Int) -> Boolean) {
+        val prefs = prefs(context)
+        val keys = prefs.all.keys.filter { key ->
+            val id = key.substringAfterLast('_').toIntOrNull()
+            id != null && shouldRemove(id)
+        }
+        if (keys.isNotEmpty()) prefs.edit { keys.forEach { remove(it) } }
+    }
+
     fun getScaleMode(context: Context, appWidgetId: Int): ScaleMode {
         val name = prefs(context).getString("scale_mode_$appWidgetId", null)
         return ScaleMode.entries.firstOrNull { it.name == name } ?: ScaleMode.FIT

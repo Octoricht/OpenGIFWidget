@@ -33,6 +33,28 @@ object GifStorage {
     fun frameFile(context: Context, appWidgetId: Int, version: Long, index: Int): File =
         File(framesDir(context, appWidgetId, version), FrameExtractor.frameFileName(index))
 
+    /** Deletes everything stored for one widget: its GIF copy and all its frames. */
+    fun deleteWidgetFiles(context: Context, appWidgetId: Int) {
+        File(File(context.filesDir, "gifs"), "$appWidgetId.gif").delete()
+        File(File(context.filesDir, "gifs"), "$appWidgetId.tmp").delete()
+        widgetFramesDir(context, appWidgetId).deleteRecursively()
+    }
+
+    /**
+     * Safety net: deletes GIFs and frames of widgets that no longer exist.
+     * Files are named after their widget id ("19.gif", "frames/19/"), so anything whose id
+     * isn't in [activeIds] is a leftover (e.g. Android didn't tell us a widget was removed).
+     */
+    fun deleteAllExcept(context: Context, activeIds: Set<Int>) {
+        val gifsDir = File(context.filesDir, "gifs")
+        val framesDir = File(context.filesDir, "frames")
+        val files = gifsDir.listFiles().orEmpty().toList() + framesDir.listFiles().orEmpty().toList()
+        for (file in files) {
+            val id = file.name.substringBefore('.').toIntOrNull()
+            if (id == null || id !in activeIds) file.deleteRecursively()
+        }
+    }
+
     /** Deletes frames from GIFs this widget used before, keeping only [keepVersion]. */
     fun deleteOldFrames(context: Context, appWidgetId: Int, keepVersion: Long) {
         widgetFramesDir(context, appWidgetId).listFiles()

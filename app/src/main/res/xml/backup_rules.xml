@@ -1,13 +1,12 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Backup rules for Android 11 and older.
+    Widget GIFs/frames are big (often over the 25 MB backup limit, which makes the whole backup
+    fail) and widget ids change on a new phone anyway, so none of the widget data is backed up.
+    Restored widgets simply show "Tap to choose a GIF".
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="file" path="gifs/" />
+    <exclude domain="file" path="frames/" />
+    <exclude domain="sharedpref" path="widgets.xml" />
 </full-backup-content>

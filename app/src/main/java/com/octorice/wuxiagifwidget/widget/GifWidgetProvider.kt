@@ -3,12 +3,14 @@ package com.octorice.wuxiagifwidget.widget
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.view.View
 import android.widget.RemoteViews
 import com.octorice.wuxiagifwidget.R
 import com.octorice.wuxiagifwidget.config.GifConfigActivity
+import com.octorice.wuxiagifwidget.data.GifStorage
 import com.octorice.wuxiagifwidget.data.ScaleMode
 import com.octorice.wuxiagifwidget.data.WidgetStore
 import com.octorice.wuxiagifwidget.provider.FrameProvider
@@ -27,6 +29,29 @@ class GifWidgetProvider : AppWidgetProvider() {
         for (appWidgetId in appWidgetIds) {
             updateWidget(context, appWidgetManager, appWidgetId)
         }
+        // onUpdate runs on reboot, app updates and when widgets are added,
+        // which makes it a good moment to sweep away files of widgets that no longer exist.
+        val allIds = appWidgetManager.getAppWidgetIds(ComponentName(context, GifWidgetProvider::class.java))
+        // Safety: if Android reports no widgets while we're updating some, something is off; skip.
+        if (allIds.isNotEmpty()) {
+            val activeIds = (allIds + appWidgetIds).toSet()
+            WidgetStore.removeAllExcept(context, activeIds)
+            GifStorage.deleteAllExcept(context, activeIds)
+        }
+    }
+
+    /** A widget was removed from the home screen: delete its GIF, frames and settings. */
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        for (appWidgetId in appWidgetIds) {
+            WidgetStore.remove(context, appWidgetId)
+            GifStorage.deleteWidgetFiles(context, appWidgetId)
+        }
+    }
+
+    /** The last widget was removed: nothing should be left, so clear everything. */
+    override fun onDisabled(context: Context) {
+        WidgetStore.removeAllExcept(context, emptySet())
+        GifStorage.deleteAllExcept(context, emptySet())
     }
 
     companion object {
