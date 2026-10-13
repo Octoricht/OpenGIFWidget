@@ -273,7 +273,7 @@ private fun ConfigScreen(
                             Text("${frames.frameCount} frames · avg ${frames.intervalMs} ms · ${frames.width}×${frames.height}")
                             if (frames.frameCount < frames.sourceFrameCount) {
                                 Text(
-                                    "Long GIF: kept ${frames.frameCount} of ${frames.sourceFrameCount} frames",
+                                    "Kept ${frames.frameCount} of ${frames.sourceFrameCount} frames to keep the home screen smooth",
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }

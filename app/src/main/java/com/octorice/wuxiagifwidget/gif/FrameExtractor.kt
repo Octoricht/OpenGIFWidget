@@ -30,12 +30,15 @@ data class FrameSet(
  * Later, the launcher will hold ALL frames in memory at once, so we keep the total small:
  * frames are shrunk to at most [MAX_SIDE_PX], long GIFs skip frames to stay under [MAX_FRAMES],
  * and if it's still too much, frames are shrunk further to fit [MAX_TOTAL_PIXELS].
+ * Fast GIFs also skip frames so the widget flips at most every [MIN_INTERVAL_MS]: each flip
+ * makes the launcher redo part of its layout, so fewer flips keep the home screen smooth.
  */
 object FrameExtractor {
 
     private const val MAX_SIDE_PX = 512
     private const val MAX_FRAMES = 120
     private const val MAX_TOTAL_PIXELS = 8_000_000 // about 32 MB of bitmaps in the launcher
+    private const val MIN_INTERVAL_MS = 40 // at most 25 flips per second
 
     // Browsers treat very short delays (0-10 ms) as 100 ms, so GIFs play at the speed people expect.
     private const val MIN_FRAME_MS = 20
@@ -57,8 +60,12 @@ object FrameExtractor {
             val height = decoder.height
             if (sourceCount < 1 || width < 1 || height < 1) throw IOException("That GIF has no frames")
 
-            // Keep every frame, or every 2nd/3rd/... frame for very long GIFs.
-            val step = ceil(sourceCount / MAX_FRAMES.toDouble()).toInt()
+            // Keep every frame, or every 2nd/3rd/... frame for very long or very fast GIFs.
+            val durations = IntArray(sourceCount) { frameDuration(decoder, it) }
+            val averageSourceMs = durations.sum() / sourceCount.toDouble()
+            val stepForLength = ceil(sourceCount / MAX_FRAMES.toDouble()).toInt()
+            val stepForSpeed = ceil(MIN_INTERVAL_MS / averageSourceMs).toInt()
+            val step = max(1, max(stepForLength, stepForSpeed))
             val keptIndices = (0 until sourceCount step step).toList()
 
             // Shrink big GIFs, then shrink more if all frames together are still too big.
@@ -88,7 +95,7 @@ object FrameExtractor {
 
                     // A saved frame lasts as long as itself plus the frames we skipped after it.
                     for (i in sourceIndex until min(sourceIndex + step, sourceCount)) {
-                        totalMs += frameDuration(decoder, i)
+                        totalMs += durations[i]
                     }
                     onProgress(savedIndex + 1, keptIndices.size)
                 }
