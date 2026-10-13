@@ -1,7 +1,6 @@
 package com.octorice.wuxiagifwidget.home
 
 import android.text.format.Formatter
-import android.widget.ImageView
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -51,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -59,14 +59,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import com.octorice.wuxiagifwidget.R
 import com.octorice.wuxiagifwidget.data.ScaleMode
+import com.octorice.wuxiagifwidget.ui.GifView
+import com.octorice.wuxiagifwidget.ui.rememberGifDrawable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import pl.droidsonroids.gif.GifDrawable
-import java.io.File
 
 /** Same dark color as the widget's own background, so previews look like the real widget. */
 private val WidgetBackground = Color(0xCC202020)
@@ -250,8 +249,10 @@ private fun WidgetCard(widget: WidgetSummary, onClick: () -> Unit, modifier: Mod
                 .clip(RoundedCornerShape(18.dp))
                 .background(WidgetBackground)
         ) {
-            if (widget.gifFile != null) {
-                GifPreview(widget.gifFile, widget.scaleMode, Modifier.fillMaxSize())
+            val drawable = rememberGifDrawable(widget.gifFile)
+            if (drawable != null) {
+                val center = Offset(widget.cropCenter.first, widget.cropCenter.second)
+                GifView(drawable, widget.scaleMode, { center }, Modifier.fillMaxSize())
                 ModeBadge(
                     widget.scaleMode,
                     Modifier
@@ -306,37 +307,6 @@ private fun ModeBadge(mode: ScaleMode, modifier: Modifier = Modifier) {
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         )
     }
-}
-
-/**
- * Plays the original GIF with android-gif-drawable's GifDrawable. It decodes one frame at a
- * time on its own background thread, so it stays smooth and light even for big GIFs.
- * GifDrawable is a classic Android Drawable, so it's shown in a classic ImageView inside Compose.
- */
-@Composable
-private fun GifPreview(file: File, scaleMode: ScaleMode, modifier: Modifier = Modifier) {
-    AndroidView(
-        factory = { context -> ImageView(context) },
-        update = { view ->
-            // Only reload when the GIF actually changed (a re-pick replaces the file).
-            val key = "${file.path}:${file.lastModified()}"
-            if (view.tag != key) {
-                (view.drawable as? GifDrawable)?.recycle()
-                view.setImageDrawable(runCatching { GifDrawable(file) }.getOrNull())
-                view.tag = key
-            }
-            view.scaleType = when (scaleMode) {
-                ScaleMode.FIT -> ImageView.ScaleType.FIT_CENTER
-                ScaleMode.FILL -> ImageView.ScaleType.CENTER_CROP
-            }
-        },
-        onRelease = { view ->
-            // Frees the GIF's memory when the card scrolls away or the screen closes.
-            (view.drawable as? GifDrawable)?.recycle()
-            view.setImageDrawable(null)
-        },
-        modifier = modifier
-    )
 }
 
 @Composable

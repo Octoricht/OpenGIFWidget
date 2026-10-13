@@ -73,6 +73,19 @@ object WidgetStore {
         prefs(context).edit { putString("scale_mode_$appWidgetId", mode.name) }
     }
 
+    /** Where Fill mode is centered, from 0 to 1 on each axis. The middle (0.5, 0.5) by default. */
+    fun getCropCenter(context: Context, appWidgetId: Int): Pair<Float, Float> {
+        val prefs = prefs(context)
+        return prefs.getFloat("crop_x_$appWidgetId", 0.5f) to prefs.getFloat("crop_y_$appWidgetId", 0.5f)
+    }
+
+    fun saveCropCenter(context: Context, appWidgetId: Int, x: Float, y: Float) {
+        prefs(context).edit {
+            putFloat("crop_x_$appWidgetId", x)
+            putFloat("crop_y_$appWidgetId", y)
+        }
+    }
+
     fun saveGif(context: Context, appWidgetId: Int, gif: StoredGif) {
         prefs(context).edit {
             putString("gif_name_$appWidgetId", gif.name)

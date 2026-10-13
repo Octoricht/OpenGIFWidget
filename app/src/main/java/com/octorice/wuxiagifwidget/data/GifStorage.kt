@@ -22,6 +22,25 @@ object GifStorage {
     fun gifFile(context: Context, appWidgetId: Int): File =
         File(File(context.filesDir, "gifs"), "$appWidgetId.gif")
 
+    /**
+     * A newly picked GIF waits here until you tap Save (files/gifs/<widgetId>.pending.gif),
+     * so backing out of the screen never touches the GIF the widget is using.
+     */
+    fun pendingGifFile(context: Context, appWidgetId: Int): File =
+        File(File(context.filesDir, "gifs"), "$appWidgetId.pending.gif")
+
+    /** Makes the pending GIF the widget's real GIF. */
+    fun commitPendingGif(context: Context, appWidgetId: Int) {
+        val pending = pendingGifFile(context, appWidgetId)
+        if (pending.isFile && !pending.renameTo(gifFile(context, appWidgetId))) {
+            throw IOException("Couldn't save the GIF")
+        }
+    }
+
+    fun deletePendingGif(context: Context, appWidgetId: Int) {
+        pendingGifFile(context, appWidgetId).delete()
+    }
+
     /** All frame folders of one widget: files/frames/<widgetId>/ */
     private fun widgetFramesDir(context: Context, appWidgetId: Int): File =
         File(File(context.filesDir, "frames"), "$appWidgetId")
@@ -40,7 +59,8 @@ object GifStorage {
 
     /** Deletes everything stored for one widget: its GIF copy and all its frames. */
     fun deleteWidgetFiles(context: Context, appWidgetId: Int) {
-        File(File(context.filesDir, "gifs"), "$appWidgetId.gif").delete()
+        gifFile(context, appWidgetId).delete()
+        pendingGifFile(context, appWidgetId).delete()
         File(File(context.filesDir, "gifs"), "$appWidgetId.tmp").delete()
         widgetFramesDir(context, appWidgetId).deleteRecursively()
     }
@@ -67,11 +87,14 @@ object GifStorage {
             ?.forEach { it.deleteRecursively() }
     }
 
-    /** Copies the GIF and returns its info. Slow, so call it off the main thread. */
+    /**
+     * Copies a picked GIF into [pendingGifFile] and returns its info.
+     * Slow, so call it off the main thread.
+     */
     fun importGif(context: Context, uri: Uri, appWidgetId: Int): StoredGif {
-        val target = gifFile(context, appWidgetId)
+        val target = pendingGifFile(context, appWidgetId)
         target.parentFile?.mkdirs()
-        // Copy to a temp file first, so a failed copy never replaces a working GIF.
+        // Copy to a temp file first, so a failed copy never leaves a broken file behind.
         val temp = File(target.parentFile, "$appWidgetId.tmp")
         try {
             val input = context.contentResolver.openInputStream(uri)

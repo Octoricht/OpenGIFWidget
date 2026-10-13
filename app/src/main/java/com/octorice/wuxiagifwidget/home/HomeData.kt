@@ -8,6 +8,7 @@ import com.octorice.wuxiagifwidget.data.ScaleMode
 import com.octorice.wuxiagifwidget.data.StoredGif
 import com.octorice.wuxiagifwidget.data.WidgetStore
 import com.octorice.wuxiagifwidget.widget.GifWidgetProvider
+import com.octorice.wuxiagifwidget.widget.WidgetSizes
 import java.io.File
 
 /** Everything the home screen shows about one widget. */
@@ -15,6 +16,7 @@ data class WidgetSummary(
     val appWidgetId: Int,
     val gif: StoredGif?,
     val scaleMode: ScaleMode,
+    val cropCenter: Pair<Float, Float>, // where Fill mode is centered (0..1 on each axis)
     val gifFile: File?,      // the original GIF, used for the animated preview
     val aspectRatio: Float,  // width / height of the widget on the home screen
     val storageBytes: Long
@@ -32,8 +34,9 @@ object HomeData {
                 appWidgetId = id,
                 gif = gif,
                 scaleMode = WidgetStore.getScaleMode(context, id),
+                cropCenter = WidgetStore.getCropCenter(context, id),
                 gifFile = GifStorage.gifFile(context, id).takeIf { gif?.frames != null && it.isFile },
-                aspectRatio = widgetAspectRatio(manager, id),
+                aspectRatio = WidgetSizes.aspectRatio(context, id),
                 storageBytes = GifStorage.widgetStorageBytes(context, id)
             )
         }
@@ -44,17 +47,5 @@ object HomeData {
         val manager = AppWidgetManager.getInstance(context)
         if (!manager.isRequestPinAppWidgetSupported) return false
         return manager.requestPinAppWidget(ComponentName(context, GifWidgetProvider::class.java), null, null)
-    }
-
-    /**
-     * The launcher tells each widget its size in dp. In portrait, a widget is
-     * "min width" wide and "max height" tall. Clamped so very thin widgets still look like cards.
-     */
-    private fun widgetAspectRatio(manager: AppWidgetManager, appWidgetId: Int): Float {
-        val options = manager.getAppWidgetOptions(appWidgetId)
-        val width = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
-        val height = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
-        if (width <= 0 || height <= 0) return 1f
-        return (width.toFloat() / height).coerceIn(0.5f, 2f)
     }
 }

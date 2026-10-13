@@ -1,8 +1,11 @@
 package com.octorice.wuxiagifwidget.gif
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Rect
 import androidx.core.graphics.createBitmap
-import androidx.core.graphics.scale
 import pl.droidsonroids.gif.GifDecoder
 import pl.droidsonroids.gif.InputSource
 import java.io.File
@@ -23,6 +26,13 @@ data class FrameSet(
     val width: Int,
     val height: Int
 )
+
+/**
+ * Which part of the GIF to keep, for Fill mode: a region with the widget's shape
+ * ([aspectRatio] = width / height), centered as close as possible to
+ * ([centerX], [centerY]), which go from 0 (left/top edge) to 1 (right/bottom edge).
+ */
+data class Crop(val centerX: Float, val centerY: Float, val aspectRatio: Float)
 
 /**
  * Splits a GIF into PNG files: frame_000.png, frame_001.png, ...
@@ -51,6 +61,7 @@ object FrameExtractor {
         gifFile: File,
         outDir: File,
         version: Long,
+        crop: Crop?, // null = keep the whole frame (Fit mode)
         onProgress: (done: Int, total: Int) -> Unit
     ): FrameSet {
         val decoder = GifDecoder(InputSource.FileSource(gifFile))
@@ -68,30 +79,35 @@ object FrameExtractor {
             val step = max(1, max(stepForLength, stepForSpeed))
             val keptIndices = (0 until sourceCount step step).toList()
 
+            // The part of each frame we keep: everything, or the Fill crop.
+            val source = if (crop == null) Rect(0, 0, width, height) else cropRect(width, height, crop)
+
             // Shrink big GIFs, then shrink more if all frames together are still too big.
-            var scale = min(1.0, MAX_SIDE_PX / max(width, height).toDouble())
-            val totalPixels = keptIndices.size * (width * scale) * (height * scale)
+            // Measured on the kept part, so a cropped GIF keeps more detail.
+            var scale = min(1.0, MAX_SIDE_PX / max(source.width(), source.height()).toDouble())
+            val totalPixels = keptIndices.size * (source.width() * scale) * (source.height() * scale)
             if (totalPixels > MAX_TOTAL_PIXELS) scale *= sqrt(MAX_TOTAL_PIXELS / totalPixels)
-            val outWidth = max(1, (width * scale).roundToInt())
-            val outHeight = max(1, (height * scale).roundToInt())
+            val outWidth = max(1, (source.width() * scale).roundToInt())
+            val outHeight = max(1, (source.height() * scale).roundToInt())
 
             outDir.mkdirs()
-            // One full-size bitmap that every frame is drawn into, to save memory.
+            // Two bitmaps reused for every frame, to save memory: the decoder draws the full
+            // frame into [buffer], then the kept part is drawn (shrunk) into [output].
             val buffer = createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val output = createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(output)
+            val paint = Paint(Paint.FILTER_BITMAP_FLAG) // smooth shrinking
+            val target = Rect(0, 0, outWidth, outHeight)
             var totalMs = 0L
             try {
                 keptIndices.forEachIndexed { savedIndex, sourceIndex ->
                     // Always moving forward, so the decoder never has to restart from frame 0.
                     decoder.seekToFrame(sourceIndex, buffer)
-                    val frame = if (outWidth == width && outHeight == height) {
-                        buffer
-                    } else {
-                        buffer.scale(outWidth, outHeight, filter = true)
-                    }
+                    output.eraseColor(Color.TRANSPARENT) // keep transparent GIFs transparent
+                    canvas.drawBitmap(buffer, source, target, paint)
                     File(outDir, frameFileName(savedIndex)).outputStream().use {
-                        frame.compress(Bitmap.CompressFormat.PNG, 100, it)
+                        output.compress(Bitmap.CompressFormat.PNG, 100, it)
                     }
-                    if (frame !== buffer) frame.recycle()
 
                     // A saved frame lasts as long as itself plus the frames we skipped after it.
                     for (i in sourceIndex until min(sourceIndex + step, sourceCount)) {
@@ -101,6 +117,7 @@ object FrameExtractor {
                 }
             } finally {
                 buffer.recycle()
+                output.recycle()
             }
 
             return FrameSet(
@@ -116,6 +133,25 @@ object FrameExtractor {
         } finally {
             decoder.recycle()
         }
+    }
+
+    /**
+     * The biggest region with the crop's shape that fits in the frame, slid as close as
+     * possible to the chosen center (it can't go past the frame's edges).
+     */
+    fun cropRect(width: Int, height: Int, crop: Crop): Rect {
+        val cropWidth: Int
+        val cropHeight: Int
+        if (width.toFloat() / height > crop.aspectRatio) {
+            cropHeight = height // GIF is wider than the widget: keep full height
+            cropWidth = max(1, (height * crop.aspectRatio).roundToInt()).coerceAtMost(width)
+        } else {
+            cropWidth = width // GIF is taller than the widget: keep full width
+            cropHeight = max(1, (width / crop.aspectRatio).roundToInt()).coerceAtMost(height)
+        }
+        val left = (crop.centerX * width - cropWidth / 2f).roundToInt().coerceIn(0, width - cropWidth)
+        val top = (crop.centerY * height - cropHeight / 2f).roundToInt().coerceIn(0, height - cropHeight)
+        return Rect(left, top, left + cropWidth, top + cropHeight)
     }
 
     private fun frameDuration(decoder: GifDecoder, index: Int): Int {
