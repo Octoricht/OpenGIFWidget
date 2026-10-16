@@ -4,13 +4,22 @@
     android:id="@android:id/background"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_background"
+    android:background="@drawable/widget_clip"
     android:clipToOutline="true">
 
+    <!-- Background: tinted to the widget's color and faded to its opacity from code. -->
+    <ImageView
+        android:id="@+id/widget_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no"
+        android:scaleType="fitXY"
+        android:src="@drawable/widget_background" />
+
     <!--
-        Holds one ImageView per frame and shows them one after another.
+        Animations: holds one ImageView per frame and shows them one after another.
         autoStart = start flipping by itself as soon as the launcher shows it.
-        The flip interval (frame speed) is set from code for each GIF.
+        The flip interval (frame speed) is set from code for each widget.
     -->
     <ViewFlipper
         android:id="@+id/widget_flipper"
@@ -18,7 +27,14 @@
         android:layout_height="match_parent"
         android:autoStart="true" />
 
-    <!-- Shown only while no GIF has been chosen yet. -->
+    <!-- Still pictures: a single plain ImageView is added here instead of using the flipper. -->
+    <FrameLayout
+        android:id="@+id/widget_still"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+    <!-- Shown only while no picture has been chosen yet. -->
     <ImageView
         android:id="@+id/widget_placeholder"
         android:layout_width="match_parent"

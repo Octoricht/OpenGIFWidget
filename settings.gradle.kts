@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "WuxiaGIFWidget"
+rootProject.name = "OpenGIFWidget"
 include(":app")

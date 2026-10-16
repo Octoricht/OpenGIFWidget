@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Dark rounded rectangle, so you can see the widget's edges while resizing. -->
+<!--
+    The widget's background shape. It's drawn by an ImageView that the app tints to the
+    widget's chosen color (setColorFilter) and fades to its chosen opacity (setImageAlpha).
+-->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="#CC202020" />
-    <corners android:radius="16dp" />
+    <solid android:color="#FF202020" />
+    <corners android:radius="@dimen/widget_corner_radius" />
 </shape>

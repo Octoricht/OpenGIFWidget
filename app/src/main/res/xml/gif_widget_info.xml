@@ -10,7 +10,7 @@
     widgetFeatures="reconfigurable" = Android 12+ launchers may offer "reconfigure" on long-press.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:configure="com.octorice.wuxiagifwidget.config.GifConfigActivity"
+    android:configure="com.octorice.opengifwidget.config.GifConfigActivity"
     android:description="@string/widget_description"
     android:initialLayout="@layout/widget_gif"
     android:minWidth="110dp"

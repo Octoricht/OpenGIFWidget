@@ -1,9 +1,77 @@
 <resources>
-    <string name="app_name">WuxiaGIFWidget</string>
+    <string name="app_name">OpenGIFWidget</string>
     <!-- Invisible (zero-width space) so the launcher shows no title under the widgets. -->
     <string name="widget_name">\u200B</string>
     <string name="widget_description">Plays an animated GIF on your home screen</string>
     <string name="widget_image_description">Animated GIF</string>
     <string name="widget_tap_to_choose">Tap to choose a GIF</string>
     <string name="widget_tap_to_repick">Tap and pick this GIF again</string>
+
+    <!-- Errors shown in the editor -->
+    <string name="error_too_large">This file is %1$s. The limit is %2$s.</string>
+    <string name="error_cannot_open">Couldn\'t open that file. Try picking it again.</string>
+    <string name="error_unsupported">This file couldn\'t be opened. It may be damaged, or its format isn\'t supported.</string>
+    <string name="error_no_space">Your phone is almost out of storage. Free up some space and try again.</string>
+    <string name="error_out_of_memory">This file is too big to process on this phone.</string>
+    <string name="error_frames_missing">This widget\'s saved frames are missing. Pick the file again.</string>
+    <string name="error_generic">Something went wrong. Please try again.</string>
+
+    <!-- Home screen: removing a widget -->
+    <string name="home_hint">Tap a widget to edit it. Long-press to remove it.</string>
+    <string name="remove_title">Remove this widget?</string>
+    <string name="remove_message">Apps can\'t take widgets off your home screen, only your launcher can. If this widget is on your home screen, long-press it there and choose Remove.\n\nIf it isn\'t (a leftover from a setup you cancelled), you can remove it from this list. Restarting your phone also clears leftovers.</string>
+    <string name="remove_confirm">Remove from list</string>
+    <string name="remove_cancel">Cancel</string>
+    <string name="remove_done">Removed from the list</string>
+
+    <!-- Videos -->
+    <string name="error_unsupported_video">This video couldn\'t be opened. It may be damaged, or your phone can\'t play its format.</string>
+    <string name="trim_title">Choose a clip</string>
+    <string name="trim_start">Start: %1$s</string>
+    <plurals name="trim_length">
+        <item quantity="one">Length: %1$s s · %2$d frame</item>
+        <item quantity="other">Length: %1$s s · %2$d frames</item>
+    </plurals>
+    <string name="trim_use">Use this clip</string>
+    <string name="trim_cancel">Cancel</string>
+    <string name="trim_start_frame">First frame of the clip</string>
+    <string name="progress_opening_video">Opening the video…</string>
+    <string name="progress_reading_video">Taking frames from the video…</string>
+    <string name="progress_cancel">Cancel</string>
+
+    <!-- Widget names -->
+    <string name="editor_name">Name</string>
+    <string name="no_picture_yet">No picture yet</string>
+
+    <!-- Editor: speed -->
+    <string name="editor_speed">Speed</string>
+    <string name="editor_speed_value">%1$s×</string>
+    <string name="editor_speed_reset">Reset</string>
+    <string name="editor_speed_fps">Plays at about %1$d fps. The FPS cap (%2$d) can be changed in Settings.</string>
+
+    <!-- Settings screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_back">Back</string>
+    <string name="settings_animation">Animation</string>
+    <string name="settings_fps_cap">FPS cap</string>
+    <string name="settings_fps_cap_description">The fastest any widget will play. Lower values save battery and keep your home screen smooth. Changing it updates all your widgets right away.</string>
+    <string name="settings_about">About</string>
+    <string name="about_description">Picture, GIF &amp; video widgets, open source, no ads</string>
+    <string name="about_version">Version %1$s</string>
+    <string name="about_thanks">Thank you for using my app, Octorice loves you &lt;3</string>
+
+    <!-- Editor: background -->
+    <string name="editor_background">Background</string>
+    <string name="editor_opacity">Opacity: %1$d%%</string>
+    <string name="color_transparent">Transparent</string>
+    <string name="color_dark">Dark</string>
+    <string name="color_black">Black</string>
+    <string name="color_white">White</string>
+    <string name="color_gray">Gray</string>
+    <string name="color_pink">Pink</string>
+    <string name="color_lavender">Lavender</string>
+    <string name="color_sky">Sky</string>
+    <string name="color_mint">Mint</string>
+    <string name="color_butter">Butter</string>
+    <string name="color_peach">Peach</string>
 </resources>

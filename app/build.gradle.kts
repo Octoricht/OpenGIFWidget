@@ -4,13 +4,13 @@ plugins {
 }
 
 android {
-    namespace = "com.octorice.wuxiagifwidget"
+    namespace = "com.octorice.opengifwidget"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.octorice.wuxiagifwidget"
+        applicationId = "com.octorice.opengifwidget"
         minSdk = 26
         targetSdk = 37
         versionCode = 1
@@ -33,6 +33,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true // gives the app BuildConfig.VERSION_NAME for the About section
     }
 }
 

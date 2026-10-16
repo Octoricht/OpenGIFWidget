@@ -10,12 +10,12 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.WuxiaGIFWidget">
+        android:theme="@style/Theme.OpenGIFWidget">
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.WuxiaGIFWidget"
+            android:theme="@style/Theme.OpenGIFWidget"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -24,20 +24,27 @@
             </intent-filter>
         </activity>
 
+        <!-- App settings (FPS cap) and About. Only opened from inside the app. -->
+        <activity
+            android:name=".settings.SettingsActivity"
+            android:exported="false"
+            android:label="@string/settings_title"
+            android:theme="@style/Theme.OpenGIFWidget" />
+
         <!-- Opens when a widget is added, so you can pick its GIF. -->
         <activity
             android:name=".config.GifConfigActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:taskAffinity=""
-            android:theme="@style/Theme.WuxiaGIFWidget">
+            android:theme="@style/Theme.OpenGIFWidget">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>
         </activity>
 
         <!--
-            Serves the PNG frames to the launcher, which draws the widget.
+            Serves the WebP frames to the launcher, which draws the widget.
             exported = other apps (the launcher) can read it. It's read-only and only serves frames.
         -->
         <provider
