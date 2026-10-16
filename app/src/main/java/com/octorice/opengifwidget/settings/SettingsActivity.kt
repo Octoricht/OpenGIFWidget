@@ -15,10 +15,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -72,6 +75,7 @@ class SettingsActivity : ComponentActivity() {
 private fun SettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val uriHandler = LocalUriHandler.current
     var fpsCap by remember { mutableIntStateOf(AppSettings.getFpsCap(context)) }
 
     Scaffold(
@@ -140,6 +144,27 @@ private fun SettingsScreen(onBack: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center
                 )
+
+                // Donation: opens the Ko-fi page in the browser (the app itself never goes online).
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.about_donate_message),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+                val donateUrl = stringResource(R.string.about_donate_url)
+                Button(onClick = {
+                    try {
+                        uriHandler.openUri(donateUrl)
+                    } catch (e: Exception) {
+                        // No browser on this phone: nothing to open the link with.
+                    }
+                }) {
+                    Icon(painterResource(R.drawable.ic_favorite), contentDescription = null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.about_donate_button))
+                }
             }
 
             Spacer(Modifier.height(8.dp))

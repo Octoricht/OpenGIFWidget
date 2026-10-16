@@ -38,7 +38,9 @@ RemoteViews can't play GIFs directly, so:
   shape so Android 12+ still clips corners. Changing only the background doesn't remake frames.
 - Apps can't remove widgets from the home screen (only the launcher/host can). Long-press on a card in the app =
   "Remove from list": deletes its data and sets `hidden_<id>` (cleared when the widget is saved again). Launchers
-  sometimes keep "ghost" ids from cancelled setups; they usually clean them up on restart (then onDeleted runs).
+  sometimes keep "ghost" ids from cancelled setups (OnePlus: adding from the home screen widget menu, then cancelling
+  the editor). So the editor sets `hidden_<id>` itself when it closes without saving and the widget has no picture.
+  Launchers usually clean ghosts up on restart (then onDeleted runs).
 - New widgets default to Fill.
 - Videos (`gif/VideoSource`, `config/TrimDialog`): read in place with MediaMetadataRetriever (never copied, 1 GB limit),
   trim dialog (start + length, max 5 s), frames taken at the FPS cap -> master frames like GIFs. Android 9+: batch decoding

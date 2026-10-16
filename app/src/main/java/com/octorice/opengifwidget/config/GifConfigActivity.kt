@@ -136,6 +136,7 @@ import kotlin.math.roundToInt
 class GifConfigActivity : ComponentActivity() {
 
     private var appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
+    private var savedSuccessfully = false // true once Save / "Add to home screen" succeeded
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -188,7 +189,15 @@ class GifConfigActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        if (isFinishing && appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) discardUnsavedFrames()
+        if (isFinishing && appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+            discardUnsavedFrames()
+            // Setup cancelled before the widget ever got a picture: the launcher should now delete
+            // this widget, but some (e.g. OnePlus) keep it as an invisible leftover. Hide it from
+            // the app's list; saving a picture for it later shows it again.
+            if (!savedSuccessfully && WidgetStore.getGif(this, appWidgetId)?.frames == null) {
+                WidgetStore.setHidden(this, appWidgetId, true)
+            }
+        }
     }
 
     /** Deletes frame folders the widget doesn't use (e.g. from a file picked but not saved). */
@@ -320,6 +329,7 @@ class GifConfigActivity : ComponentActivity() {
     }
 
     private fun finishWithSuccess() {
+        savedSuccessfully = true
         setResult(RESULT_OK, resultIntent())
         finish()
     }
@@ -499,9 +509,10 @@ private fun EditorScreen(
 
     trimming?.let { video ->
         TrimDialog(
+            uri = video.uri,
             info = video.source.info,
             fpsCap = fpsCap,
-            loadThumbnail = { timeMs -> videoThumbnail(video, timeMs) },
+            loadFrame = { timeMs -> videoThumbnail(video, timeMs) },
             onCancel = {
                 trimming = null
                 // Wait for a thumbnail that may still be loading before closing the video.

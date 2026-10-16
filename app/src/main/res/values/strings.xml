@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">OpenGIFWidget</string>
     <!-- Invisible (zero-width space) so the launcher shows no title under the widgets. -->
     <string name="widget_name">\u200B</string>
@@ -34,7 +34,8 @@
     </plurals>
     <string name="trim_use">Use this clip</string>
     <string name="trim_cancel">Cancel</string>
-    <string name="trim_start_frame">First frame of the clip</string>
+    <string name="trim_first_frame">First frame</string>
+    <string name="trim_last_frame">Last frame</string>
     <string name="progress_opening_video">Opening the video…</string>
     <string name="progress_reading_video">Taking frames from the video…</string>
     <string name="progress_cancel">Cancel</string>
@@ -58,7 +59,12 @@
     <string name="settings_about">About</string>
     <string name="about_description">Picture, GIF &amp; video widgets, open source, no ads</string>
     <string name="about_version">Version %1$s</string>
-    <string name="about_thanks">Thank you for using my app, Octorice loves you &lt;3</string>
+    <string name="about_donate_message">If you are enjoying the app, a small donation would mean a lot :) Octorice loves you either way &lt;3</string>
+    <string name="about_donate_button">Support me on Ko-fi</string>
+    <!-- Not shown as text, so it isn't translated. -->
+    <string name="about_donate_url" translatable="false">https://ko-fi.com/octorice</string>
+    <!-- The "..." is part of the joke, keep it as three dots. -->
+    <string name="about_thanks" tools:ignore="TypographyEllipsis">Thank you for using my app, What yall snacking on ? UUUMMM...!</string>
 
     <!-- Editor: background -->
     <string name="editor_background">Background</string>
