@@ -66,6 +66,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -464,6 +465,11 @@ private fun EditorScreen(
     var nameEdited by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf<Busy?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val scrollState = rememberScrollState()
+    // Errors are shown at the bottom of the page: scroll there so they're never missed.
+    LaunchedEffect(error) {
+        if (error != null) scrollState.animateScrollTo(scrollState.maxValue)
+    }
     var trimming by remember { mutableStateOf<OpenedVideo?>(null) } // video waiting for its clip
     var videoJob by remember { mutableStateOf<Job?>(null) } // running frame extraction (cancellable)
 
@@ -630,7 +636,7 @@ private fun EditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 // On tablets and in landscape, keep a readable width in the middle.
                 .wrapContentWidth()
                 .widthIn(max = 640.dp)
