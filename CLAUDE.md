@@ -29,13 +29,24 @@ RemoteViews can't play GIFs directly, so:
    (evenly picked subset of frames, loop duration unchanged), so no re-decoding is needed for speed/FPS changes.
 - Always `removeAllViews` on the flipper before adding frames: launchers re-apply updates on top of the existing widget.
 - Fill mode crops are baked into the widget frames (RemoteViews can't move an image); the crop center is stored per widget.
+  In the editor the Fill preview is locked (no accidental drags): "Reposition" opens `CropView` (whole picture, widget-shaped
+  window, outside dimmed; drag moves the window, limits from `FrameExtractor.cropRect`). Done keeps it, Cancel/Back restores
+  it, Save is disabled while repositioning. No warning text about cropping (user's choice).
 - In-app previews (`ui/FramePlayer.kt`) play frame files one at a time (two bitmaps reused), following the same `Playback` plan.
 - Still pictures (non-GIF images, or 1-frame GIFs) = a frame set with 1 frame: the widget adds a single ImageView to
   `widget_still` instead of using the flipper. `StillImageDecoder`: ImageDecoder on API 28+ (applies EXIF itself),
   BitmapFactory + built-in `android.media.ExifInterface` on API 26-27 (AndroidX Exif would be a new library).
+- Background picker (`ui/BackgroundPicker`): Transparent, a rainbow "Custom color" circle, then preset swatches.
+  The rainbow opens `ui/ColorPickerDialog` (own Compose code, no library): saturation/brightness square, hue bar,
+  hex box. A color that isn't a preset counts as custom (the rainbow shows it in its middle). Opacity stays the slider.
 - Background color/opacity per widget (`WidgetBackground`): an ImageView (`widget_bg`) with a rounded shape, tinted via
   `setColorFilter` and faded via `setImageAlpha` (both RemoteViews-safe on API 26+). The root keeps a transparent rounded
   shape so Android 12+ still clips corners. Changing only the background doesn't remake frames.
+  Android 8-11 never clip widgets: anything drawn edge to edge needs its own rounded shape (e.g. `widget_label_background`).
+  For Fill pictures there, `deriveWidgetFrames` cuts rounded corners into the frames (transparent, anti-aliased,
+  radius = widget corner radius / widget width). Per-widget editor switch "Rounded corners" (`round_<id>`, default on),
+  shown only on Android 8-11 in Fill (`WidgetSizes.needsRoundedFrames`). `fit_round_<id>` records whether the current
+  frames are rounded; `WidgetFrames.refreshIfNeeded` remakes them when that doesn't match (fixes older widgets on app open).
 - Apps can't remove widgets from the home screen (only the launcher/host can). Long-press on a card in the app =
   "Remove from list": deletes its data and sets `hidden_<id>` (cleared when the widget is saved again). Launchers
   sometimes keep "ghost" ids from cancelled setups (OnePlus: adding from the home screen widget menu, then cancelling
@@ -43,7 +54,7 @@ RemoteViews can't play GIFs directly, so:
   Launchers usually clean ghosts up on restart (then onDeleted runs).
 - New widgets default to Fill.
 - Videos (`gif/VideoSource`, `config/TrimDialog`): read in place with MediaMetadataRetriever (never copied, 1 GB limit),
-  trim dialog (start + length, max 5 s), frames taken at the FPS cap -> master frames like GIFs. Android 9+: batch decoding
+  trim dialog (start + length, max 3 s, 2 s on low-end phones), frames taken at the FPS cap -> master frames like GIFs. Android 9+: batch decoding
   with `getFramesAtIndex` (batch size ~48 MB of full-size frames) + parallel WebP saving (~1.8 s for 150 frames); fallback:
   frame-by-time (`OPTION_CLOSEST`, slow) with 2-4 parallel readers. Rotation: compare frame shape to the upright shape and
   rotate only if sideways (works whether or not the platform already rotated). Never request frames larger than the video.
@@ -67,10 +78,31 @@ RemoteViews can't play GIFs directly, so:
 - FPS cap (Settings): 10 / 15 / 24 / 30, default 30. Never above 30. Speed per widget: 0.25x-3x.
   target = avgDelay / speed. If target < 1000/fpsCap: keep floor(loop / minInterval) frames spread evenly
   (not "every Nth", which halved the fps of 30 ms GIFs), interval = loop / kept, so loop duration stays exact.
-- Videos: MediaMetadataRetriever only (no FFmpeg, no audio), extracted at the FPS cap, max 5 s (150 frames).
+- Videos: MediaMetadataRetriever only (no FFmpeg, no audio), extracted at the FPS cap, max 3 s (2 s on low-end phones).
 - Input size limits per file: 50 MB (50,000,000 bytes, as Android displays sizes) for images/GIFs, 1 GB for videos.
 - Fully offline: no INTERNET permission, no analytics, no tracking. Media only via photo picker / SAF, no storage permissions.
 - All user-facing text in `strings.xml`.
+
+## Release / compatibility (Milestone 7)
+- compileSdk/targetSdk 37 (Android 17, latest stable), minSdk 26. All 4 ABIs, no abiFilters; native libs are 16 KB aligned.
+- Only permission: RECEIVE_BOOT_COMPLETED. `RestoreWidgetsReceiver` redraws all widgets on BOOT_COMPLETED and
+  MY_PACKAGE_REPLACED (battery-killer recovery). Photo picker backport declared for Android 8-10 (ModuleDependencies).
+- Release: R8 optimizes the WHOLE app. Do not set `packageScope` (the template's androidx/kotlin-only scope produced an
+  APK that crashed at startup with IllegalAccessError). android-gif-drawable keeps `GifInfoHandle` (native) by itself.
+  Always smoke-test the release APK (sign with the debug key to install over the dev build).
+- `FrameLimits.forDevice()`: low-RAM phones (isLowRamDevice or memoryClass <= 128) get smaller widget frames.
+- Layouts: main grid `StaggeredGridCells.Adaptive(170.dp)`, editor/Settings max width 640dp, trim dialog scrolls,
+  no fixed heights around text. Widget preview: `drawable-nodpi/widget_preview.png` + `layout/widget_preview.xml`.
+- Settings > Reliability explains per-brand battery settings; opens ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS
+  (no REQUEST_IGNORE_BATTERY_OPTIMIZATIONS permission: Play restricts it and the app doesn't need it).
+- Device tiers (`DeviceProfile`, by total RAM): LOW (<3.5 GB reported or isLowRamDevice) / MID (<7 GB) / HIGH.
+  Max FPS cap 15 / 24 / 30 (also the default; higher options shown disabled in Settings), max video clip 2 / 3 / 3 s,
+  per-widget memory budget (`FrameLimits`) ~12 / 24 / 32 MB.
+- Usage health (`home/UsageHealth`, shown by `HealthHeader`): estimated launcher memory = shown frames x w x h x 4 bytes
+  (after FPS cap/speed); amber > 2% of RAM, red > 4% (calibrated on a smooth 9-widget, ~175 MB setup on a 12 GB phone).
+  Flips/s can only make it amber (> 8 x max FPS) because widgets on other pages are paused. Storage: amber < 1 GB free,
+  red < 300 MB. "Heavy" tag (>= 60% of the per-widget budget) only when the header isn't blue. It's an estimate (no access to the launcher's real memory).
+- Testing checklist: TESTING.md.
 
 ## Rules
 - **Don't add libraries/dependencies without asking first.**

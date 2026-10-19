@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -34,6 +35,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -57,8 +59,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -89,19 +94,29 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     var widgets by remember { mutableStateOf<List<WidgetSummary>?>(null) } // null = still loading
+    var health by remember { mutableStateOf<Health?>(null) }
     var showHowToAdd by remember { mutableStateOf(false) }
     var toRemove by remember { mutableStateOf<WidgetSummary?>(null) } // long-pressed card
 
     // Read again whenever the screen comes back (e.g. after changing it in Settings).
     val fpsCap = remember(refreshKey) { AppSettings.getFpsCap(context) }
 
-    LaunchedEffect(refreshKey) {
-        widgets = withContext(Dispatchers.IO) { HomeData.loadWidgets(context) }
+    // Loads the widgets and works out how hard they push this phone.
+    suspend fun reload() {
+        val (loaded, verdict) = withContext(Dispatchers.IO) {
+            val list = HomeData.loadWidgets(context)
+            list to UsageHealth.evaluate(context, list)
+        }
+        widgets = loaded
+        health = verdict
     }
 
+    LaunchedEffect(refreshKey) { reload() }
+
+    val pinConfirmMessage = stringResource(R.string.home_pin_confirm)
     val onAddWidget: () -> Unit = {
         if (HomeData.requestPinWidget(context)) {
-            scope.launch { snackbarHostState.showSnackbar("Confirm in the dialog to place your widget") }
+            scope.launch { snackbarHostState.showSnackbar(pinConfirmMessage) }
         } else {
             showHowToAdd = true // This launcher can't place widgets for us.
         }
@@ -115,21 +130,27 @@ fun HomeScreen(
             .fillMaxSize()
             .nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            LargeTopAppBar(
-                title = { Text("OpenGIFWidget", fontWeight = FontWeight.SemiBold) },
-                actions = {
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(painterResource(R.drawable.ic_settings), stringResource(R.string.settings_title))
-                    }
-                },
-                scrollBehavior = scrollBehavior
-            )
+            val title: @Composable () -> Unit = {
+                Text(stringResource(R.string.app_name), fontWeight = FontWeight.SemiBold)
+            }
+            val actions: @Composable RowScope.() -> Unit = {
+                IconButton(onClick = onOpenSettings) {
+                    Icon(painterResource(R.drawable.ic_settings), stringResource(R.string.settings_title))
+                }
+            }
+            // Short windows (a phone in landscape, split screen): a compact bar, so the widgets stay visible.
+            val windowHeight = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
+            if (windowHeight < 480.dp) {
+                TopAppBar(title = title, actions = actions, scrollBehavior = scrollBehavior)
+            } else {
+                LargeTopAppBar(title = title, actions = actions, scrollBehavior = scrollBehavior)
+            }
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onAddWidget,
                 icon = { Icon(painterResource(R.drawable.ic_add), contentDescription = null) },
-                text = { Text("Add widget") }
+                text = { Text(stringResource(R.string.home_add_widget)) }
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -151,7 +172,9 @@ fun HomeScreen(
                     CircularProgressIndicator()
                 }
                 ScreenState.Empty -> EmptyState(onAddWidget)
-                ScreenState.List -> WidgetGrid(widgets.orEmpty(), fpsCap, onOpenWidget, onLongPress = { toRemove = it })
+                ScreenState.List -> WidgetGrid(
+                    widgets.orEmpty(), health, fpsCap, onOpenWidget, onOpenSettings, onLongPress = { toRemove = it }
+                )
             }
         }
     }
@@ -166,10 +189,8 @@ fun HomeScreen(
                 TextButton(onClick = {
                     toRemove = null
                     scope.launch {
-                        widgets = withContext(Dispatchers.IO) {
-                            HomeData.removeFromList(context, widget.appWidgetId)
-                            HomeData.loadWidgets(context)
-                        }
+                        withContext(Dispatchers.IO) { HomeData.removeFromList(context, widget.appWidgetId) }
+                        reload()
                         snackbarHostState.showSnackbar(removedMessage)
                     }
                 }) { Text(stringResource(R.string.remove_confirm)) }
@@ -183,14 +204,10 @@ fun HomeScreen(
     if (showHowToAdd) {
         AlertDialog(
             onDismissRequest = { showHowToAdd = false },
-            confirmButton = { TextButton(onClick = { showHowToAdd = false }) { Text("Got it") } },
-            title = { Text("Add it from your home screen") },
+            confirmButton = { TextButton(onClick = { showHowToAdd = false }) { Text(stringResource(R.string.home_got_it)) } },
+            title = { Text(stringResource(R.string.home_how_to_add_title)) },
             text = {
-                Text(
-                    "1. Long-press an empty spot on your home screen\n" +
-                        "2. Tap Widgets\n" +
-                        "3. Find OpenGIFWidget and drag it onto the screen"
-                )
+                Text(stringResource(R.string.home_how_to_add_steps))
             }
         )
     }
@@ -201,13 +218,16 @@ private enum class ScreenState { Loading, Empty, List }
 @Composable
 private fun WidgetGrid(
     widgets: List<WidgetSummary>,
+    health: Health?,
     fpsCap: Int,
     onOpenWidget: (Int) -> Unit,
+    onOpenSettings: () -> Unit,
     onLongPress: (WidgetSummary) -> Unit
 ) {
     val context = LocalContext.current
     LazyVerticalStaggeredGrid(
-        columns = StaggeredGridCells.Fixed(2),
+        // As many columns as fit with cards at least 170dp wide: 2 on phones, more on tablets/landscape.
+        columns = StaggeredGridCells.Adaptive(minSize = 170.dp),
         // Extra space at the bottom so the last cards aren't hidden behind the Add button.
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 104.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -215,14 +235,17 @@ private fun WidgetGrid(
         modifier = Modifier.fillMaxSize()
     ) {
         item(span = StaggeredGridItemSpan.FullLine) {
-            StatsHeader(
+            HealthHeader(
                 widgetCount = widgets.size,
-                storage = Formatter.formatShortFileSize(context, widgets.sumOf { it.storageBytes })
+                storageBytes = widgets.sumOf { it.storageBytes },
+                health = health,
+                onOpenSettings = onOpenSettings
             )
         }
         items(widgets, key = { it.appWidgetId }) { widget ->
             WidgetCard(
                 widget = widget,
+                heavy = health?.heavyWidgetIds?.contains(widget.appWidgetId) == true,
                 fpsCap = fpsCap,
                 onClick = { onOpenWidget(widget.appWidgetId) },
                 onLongClick = { onLongPress(widget) },
@@ -244,41 +267,9 @@ private fun WidgetGrid(
 }
 
 @Composable
-private fun StatsHeader(widgetCount: Int, storage: String) {
-    Surface(
-        shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.primaryContainer,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 4.dp)
-    ) {
-        Row(Modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
-            Stat(value = "$widgetCount", label = if (widgetCount == 1) "widget" else "widgets", Modifier.weight(1f))
-            Stat(value = storage, label = "storage used", Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-private fun Stat(value: String, label: String, modifier: Modifier = Modifier) {
-    Column(modifier) {
-        Text(
-            value,
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onPrimaryContainer
-        )
-        Text(
-            label,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-        )
-    }
-}
-
-@Composable
 private fun WidgetCard(
     widget: WidgetSummary,
+    heavy: Boolean,
     fpsCap: Int,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -320,6 +311,14 @@ private fun WidgetCard(
                         .align(Alignment.TopEnd)
                         .padding(8.dp)
                 )
+                // This widget costs a lot of the home screen's memory.
+                if (heavy) {
+                    HeavyTag(
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp)
+                    )
+                }
             } else {
                 Image(
                     painter = painterResource(R.drawable.widget_placeholder),
@@ -339,10 +338,18 @@ private fun WidgetCard(
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                if (frames != null) {
-                    "${frames.frameCount} frames · ${Formatter.formatShortFileSize(context, widget.storageBytes)}"
-                } else {
-                    "Tap to choose a GIF"
+                when {
+                    frames == null -> stringResource(R.string.widget_tap_to_choose)
+                    frames.frameCount == 1 -> stringResource(
+                        R.string.home_card_still,
+                        Formatter.formatShortFileSize(context, widget.storageBytes)
+                    )
+                    else -> pluralStringResource(
+                        R.plurals.home_card_frames,
+                        frames.frameCount,
+                        frames.frameCount,
+                        Formatter.formatShortFileSize(context, widget.storageBytes)
+                    )
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -350,6 +357,24 @@ private fun WidgetCard(
                 overflow = TextOverflow.Ellipsis
             )
         }
+    }
+}
+
+/** Small amber "Heavy" pill on cards of widgets that cost a lot of memory. */
+@Composable
+private fun HeavyTag(modifier: Modifier = Modifier) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = Color(0xFFFFB74D),
+        contentColor = Color(0xFF261900),
+        modifier = modifier
+    ) {
+        Text(
+            stringResource(R.string.home_heavy_tag),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        )
     }
 }
 
@@ -363,7 +388,7 @@ private fun ModeBadge(mode: ScaleMode, modifier: Modifier = Modifier) {
         modifier = modifier
     ) {
         Text(
-            if (mode == ScaleMode.FIT) "Fit" else "Fill",
+            stringResource(if (mode == ScaleMode.FIT) R.string.mode_fit else R.string.mode_fill),
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         )
@@ -393,15 +418,15 @@ private fun EmptyState(onAddWidget: () -> Unit) {
             )
         }
         Spacer(Modifier.height(24.dp))
-        Text("No GIF widgets yet", style = MaterialTheme.typography.headlineSmall)
+        Text(stringResource(R.string.home_empty_title), style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Put a widget on your home screen, pick any GIF, and watch it play right there.",
+            stringResource(R.string.home_empty_text),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(24.dp))
-        FilledTonalButton(onClick = onAddWidget) { Text("Add your first widget") }
+        FilledTonalButton(onClick = onAddWidget) { Text(stringResource(R.string.home_empty_button)) }
     }
 }

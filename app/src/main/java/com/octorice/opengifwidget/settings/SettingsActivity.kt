@@ -1,6 +1,11 @@
 package com.octorice.opengifwidget.settings
 
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -16,6 +21,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +32,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -77,6 +85,7 @@ private fun SettingsScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
     var fpsCap by remember { mutableIntStateOf(AppSettings.getFpsCap(context)) }
+    val maxFpsCap = remember { AppSettings.maxFpsCap(context) }
 
     Scaffold(
         topBar = {
@@ -95,6 +104,9 @@ private fun SettingsScreen(onBack: () -> Unit) {
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
+                // On tablets and in landscape, keep a readable width in the middle.
+                .wrapContentWidth()
+                .widthIn(max = 640.dp)
                 .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -110,6 +122,8 @@ private fun SettingsScreen(onBack: () -> Unit) {
                     AppSettings.FPS_CAP_OPTIONS.forEachIndexed { index, fps ->
                         SegmentedButton(
                             selected = fpsCap == fps,
+                            // Caps above what this phone handles well are shown but turned off.
+                            enabled = fps <= maxFpsCap,
                             onClick = {
                                 fpsCap = fps
                                 // Save, then redraw every widget so the new cap applies right away.
@@ -123,6 +137,26 @@ private fun SettingsScreen(onBack: () -> Unit) {
                             shape = SegmentedButtonDefaults.itemShape(index, AppSettings.FPS_CAP_OPTIONS.size)
                         ) { Text("$fps") }
                     }
+                }
+                if (maxFpsCap < AppSettings.FPS_CAP_OPTIONS.max()) {
+                    Text(
+                        stringResource(R.string.settings_fps_cap_device_limit, maxFpsCap),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            SectionTitle(stringResource(R.string.settings_reliability))
+            SettingsCard {
+                Text(stringResource(R.string.settings_battery_title), style = MaterialTheme.typography.titleMedium)
+                Text(
+                    stringResource(R.string.settings_battery_text),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedButton(onClick = { openBatterySettings(context) }) {
+                    Text(stringResource(R.string.settings_battery_button))
                 }
             }
 
@@ -177,6 +211,23 @@ private fun SettingsScreen(onBack: () -> Unit) {
                     .fillMaxWidth()
                     .padding(bottom = 24.dp)
             )
+        }
+    }
+}
+
+/**
+ * Opens the phone's list of apps and their battery optimization (no permission needed).
+ * Phones without that screen get the app's own info page, which has the battery options too.
+ */
+private fun openBatterySettings(context: Context) {
+    val batteryList = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+    val appInfo = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+    for (intent in listOf(batteryList, appInfo)) {
+        try {
+            context.startActivity(intent)
+            return
+        } catch (e: ActivityNotFoundException) {
+            // This phone doesn't have that screen: try the next one.
         }
     }
 }

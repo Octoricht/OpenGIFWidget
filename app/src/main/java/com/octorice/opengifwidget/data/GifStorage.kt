@@ -122,6 +122,9 @@ object GifStorage {
         }
     }
 
+    /** Free space for the app's files (and the phone's main storage). */
+    fun freeStorageBytes(context: Context): Long = availableBytes(context, context.filesDir)
+
     /** Free space for [dir], counting space Android can free by clearing other apps' caches. */
     private fun availableBytes(context: Context, dir: File): Long = try {
         val storage = context.getSystemService(StorageManager::class.java)

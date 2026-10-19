@@ -41,6 +41,27 @@ class GifWidgetProvider : AppWidgetProvider() {
         }
     }
 
+    /**
+     * The widget was resized (or placed, or the phone rotated). If its frames no longer fit its
+     * size or shape, remake them in the background from the master frames (about a second).
+     */
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: android.os.Bundle
+    ) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        val pending = goAsync() // keep the app alive until the remake is done
+        Thread {
+            try {
+                WidgetFrames.refreshIfNeeded(context.applicationContext, appWidgetId)
+            } finally {
+                pending.finish()
+            }
+        }.start()
+    }
+
     /** A widget was removed from the home screen: delete its GIF, frames and settings. */
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
         for (appWidgetId in appWidgetIds) {

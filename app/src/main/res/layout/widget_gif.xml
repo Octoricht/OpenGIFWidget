@@ -48,7 +48,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:background="#99000000"
+        android:background="@drawable/widget_label_background"
         android:ellipsize="end"
         android:gravity="center"
         android:maxLines="2"

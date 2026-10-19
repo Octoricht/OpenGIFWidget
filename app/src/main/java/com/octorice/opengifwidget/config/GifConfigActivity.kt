@@ -38,6 +38,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -80,6 +82,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -91,6 +94,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import com.octorice.opengifwidget.R
 import com.octorice.opengifwidget.data.AppSettings
+import com.octorice.opengifwidget.data.DeviceProfile
 import com.octorice.opengifwidget.data.GifStorage
 import com.octorice.opengifwidget.data.ImportedFile
 import com.octorice.opengifwidget.data.ImportException
@@ -102,8 +106,8 @@ import com.octorice.opengifwidget.ui.toComposeColor
 import com.octorice.opengifwidget.data.ScaleMode
 import com.octorice.opengifwidget.data.StoredGif
 import com.octorice.opengifwidget.data.WidgetStore
-import com.octorice.opengifwidget.gif.Crop
 import com.octorice.opengifwidget.gif.FrameExtractor
+import com.octorice.opengifwidget.gif.FrameLimits
 import com.octorice.opengifwidget.gif.FrameSet
 import com.octorice.opengifwidget.gif.VideoSource
 import com.octorice.opengifwidget.widget.Playback
@@ -112,7 +116,19 @@ import com.octorice.opengifwidget.ui.fillPlacement
 import com.octorice.opengifwidget.ui.rememberFramePlayer
 import com.octorice.opengifwidget.ui.theme.OpenGIFWidgetTheme
 import com.octorice.opengifwidget.widget.GifWidgetProvider
+import com.octorice.opengifwidget.widget.WidgetFrames
 import com.octorice.opengifwidget.widget.WidgetSizes
+import com.octorice.opengifwidget.gif.Crop
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathOperation
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.material3.Switch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.sync.Mutex
@@ -162,6 +178,7 @@ class GifConfigActivity : ComponentActivity() {
                 name = WidgetStore.displayName(this, appWidgetId, gif),
                 scaleMode = WidgetStore.getScaleMode(this, appWidgetId),
                 cropCenter = Offset(cropX, cropY),
+                roundCorners = WidgetStore.getRoundCorners(this, appWidgetId),
                 background = WidgetStore.getBackground(this, appWidgetId),
                 speed = WidgetStore.getSpeed(this, appWidgetId)
             )
@@ -254,6 +271,7 @@ class GifConfigActivity : ComponentActivity() {
                 startMs = startMs,
                 lengthMs = lengthMs,
                 fps = AppSettings.getFpsCap(context),
+                limits = FrameLimits.forDevice(context),
                 onProgress = onProgress
             )
             discardUnsavedFrames(keepVersion = version)
@@ -273,7 +291,7 @@ class GifConfigActivity : ComponentActivity() {
                 friendlyErrors(cleanUp = { outDir.deleteRecursively() }) {
                     val imported = GifStorage.importFile(context, uri, appWidgetId)
                     val master = if (imported.isGif) {
-                        FrameExtractor.extractMasterFromGif(copy, outDir, version, onProgress)
+                        FrameExtractor.extractMasterFromGif(copy, outDir, version, FrameLimits.forDevice(context), onProgress)
                     } else {
                         FrameExtractor.extractMasterFromImage(copy, outDir, version)
                     }
@@ -301,24 +319,17 @@ class GifConfigActivity : ComponentActivity() {
         val master = gif.master ?: throw ImportException(R.string.error_frames_missing)
         var frames = gif.frames
         if (remakeFrames || frames == null) {
-            val crop = if (settings.scaleMode == ScaleMode.FILL) {
-                Crop(settings.cropCenter.x, settings.cropCenter.y, aspectRatio)
-            } else {
-                null
-            }
-            // Each save gets a new folder, so old and new frames never mix.
-            val version = System.currentTimeMillis()
-            val outDir = GifStorage.framesDir(context, appWidgetId, version)
-            frames = friendlyErrors(cleanUp = { outDir.deleteRecursively() }) {
-                FrameExtractor.deriveWidgetFrames(
-                    master, GifStorage.framesDir(context, appWidgetId, master.version), outDir, version, crop, onProgress
-                )
-            }
+            // Sized and shaped for the widget as it is on the home screen right now.
+            frames = WidgetFrames.make(
+                context, appWidgetId, master, settings.scaleMode,
+                settings.cropCenter.x to settings.cropCenter.y, settings.roundCorners, onProgress
+            )
         }
 
         WidgetStore.saveGif(context, appWidgetId, gif.copy(frames = frames, master = master))
         WidgetStore.saveScaleMode(context, appWidgetId, settings.scaleMode)
         WidgetStore.saveCropCenter(context, appWidgetId, settings.cropCenter.x, settings.cropCenter.y)
+        WidgetStore.saveRoundCorners(context, appWidgetId, settings.roundCorners)
         WidgetStore.saveBackground(context, appWidgetId, settings.background)
         WidgetStore.saveSpeed(context, appWidgetId, settings.speed)
         // An empty name falls back to the file's name.
@@ -343,6 +354,7 @@ private data class EditorSettings(
     val name: String,
     val scaleMode: ScaleMode,
     val cropCenter: Offset,
+    val roundCorners: Boolean, // Android 8-11 only: cut rounded corners into Fill pictures
     val background: WidgetBackground,
     val speed: Float
 )
@@ -386,6 +398,10 @@ private fun EditorScreen(
     var picked by remember { mutableStateOf<StoredGif?>(null) } // newly picked, not saved yet
     var scaleMode by remember { mutableStateOf(saved.settings.scaleMode) }
     var cropCenter by remember { mutableStateOf(saved.settings.cropCenter) }
+    var roundCorners by remember { mutableStateOf(saved.settings.roundCorners) }
+    // Fill: the picture is locked until you tap "Reposition" (no accidental moves). Cancel goes back here.
+    var repositioning by remember { mutableStateOf(false) }
+    var cropBeforeReposition by remember { mutableStateOf(cropCenter) }
     var background by remember { mutableStateOf(saved.settings.background) }
     var name by remember { mutableStateOf(saved.settings.name) }
     var speed by remember { mutableFloatStateOf(saved.settings.speed) }
@@ -405,7 +421,8 @@ private fun EditorScreen(
     val remakeFrames = picked != null ||
         saved.gif?.frames == null ||
         scaleMode != saved.settings.scaleMode ||
-        (scaleMode == ScaleMode.FILL && cropCenter != saved.settings.cropCenter)
+        (scaleMode == ScaleMode.FILL && cropCenter != saved.settings.cropCenter) ||
+        WidgetFrames.cutsCorners(scaleMode, roundCorners) != WidgetFrames.cutsCorners(scaleMode, saved.settings.roundCorners)
     // Speed, name and background are just settings: saving them doesn't remake frames.
     val hasChanges = remakeFrames ||
         background != saved.settings.background ||
@@ -416,9 +433,17 @@ private fun EditorScreen(
     // Back cancels instead (like the Cancel button).
     BackHandler(enabled = busy != null) { videoJob?.cancel() }
 
+    fun endReposition(keep: Boolean) {
+        if (!keep) cropCenter = cropBeforeReposition
+        repositioning = false
+    }
+    // Back while repositioning = Cancel.
+    BackHandler(enabled = repositioning && busy == null) { endReposition(keep = false) }
+
     // A new pick is shown with a fresh, centered crop and (unless you typed one) its own name.
     fun usePicked(newGif: StoredGif) {
         picked = newGif
+        repositioning = false
         cropCenter = Offset(0.5f, 0.5f)
         if (!nameEdited) name = WidgetStore.defaultName(newGif.name)
     }
@@ -486,7 +511,7 @@ private fun EditorScreen(
             busy = Busy.Saving(0, 0)
             error = null
             try {
-                val settings = EditorSettings(name, scaleMode, cropCenter, background, speed)
+                val settings = EditorSettings(name, scaleMode, cropCenter, roundCorners, background, speed)
                 save(gif, settings, remakeFrames, widgetAspectRatio) { done, total ->
                     busy = Busy.Saving(done, total)
                 }
@@ -512,6 +537,7 @@ private fun EditorScreen(
             uri = video.uri,
             info = video.source.info,
             fpsCap = fpsCap,
+            maxClipMs = remember { DeviceProfile.tier(context).maxClipMs },
             loadFrame = { timeMs -> videoThumbnail(video, timeMs) },
             onCancel = {
                 trimming = null
@@ -525,10 +551,10 @@ private fun EditorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (saved.gif == null) "New GIF widget" else "Edit widget") },
+                title = { Text(stringResource(if (saved.gif == null) R.string.editor_title_new else R.string.editor_title_edit)) },
                 navigationIcon = {
                     IconButton(onClick = onClose, enabled = busy == null) {
-                        Icon(painterResource(R.drawable.ic_close), contentDescription = "Close")
+                        Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.editor_close))
                     }
                 }
             )
@@ -536,8 +562,9 @@ private fun EditorScreen(
         bottomBar = {
             SaveBar(
                 busy = busy,
-                enabled = master != null && busy == null,
-                label = if (saved.gif == null) "Add to home screen" else "Save",
+                // Finish repositioning first (Done or Cancel), so a half-done move is never saved.
+                enabled = master != null && busy == null && !repositioning,
+                label = stringResource(if (saved.gif == null) R.string.editor_add else R.string.editor_save),
                 onSave = ::onSave,
                 onCancel = { videoJob?.cancel() }
             )
@@ -548,6 +575,9 @@ private fun EditorScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
+                // On tablets and in landscape, keep a readable width in the middle.
+                .wrapContentWidth()
+                .widthIn(max = 640.dp)
                 .padding(horizontal = 20.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -558,17 +588,33 @@ private fun EditorScreen(
                 aspectRatio = widgetAspectRatio,
                 cropCenter = { cropCenter },
                 onCropCenterChange = { cropCenter = it },
-                dragEnabled = busy == null
+                repositioning = repositioning,
+                canReposition = image != null && scaleMode == ScaleMode.FILL && busy == null,
+                onStartReposition = {
+                    cropBeforeReposition = cropCenter
+                    repositioning = true
+                },
+                onEndReposition = ::endReposition,
+                // Shows the corners the widget will really have (square on Android 8-11 when switched off).
+                squareCorners = WidgetSizes.needsRoundedFrames && scaleMode == ScaleMode.FILL && !roundCorners
             )
 
             Spacer(Modifier.height(12.dp))
             Text(
                 text = when {
-                    shownGif == null -> "No GIF yet"
+                    shownGif == null -> stringResource(R.string.editor_nothing_picked)
                     master == null -> shownGif.name
-                    else -> "${shownGif.name} · " +
-                        (if (master.frameCount == 1) "${master.width}×${master.height}" else "${master.sourceFrameCount} frames") +
-                        " · " + Formatter.formatShortFileSize(context, shownGif.sizeBytes)
+                    master.frameCount == 1 -> stringResource(
+                        R.string.editor_info_still,
+                        shownGif.name, master.width, master.height,
+                        Formatter.formatShortFileSize(context, shownGif.sizeBytes)
+                    )
+                    else -> pluralStringResource(
+                        R.plurals.editor_info_frames,
+                        master.sourceFrameCount,
+                        shownGif.name, master.sourceFrameCount,
+                        Formatter.formatShortFileSize(context, shownGif.sizeBytes)
+                    )
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -595,7 +641,7 @@ private fun EditorScreen(
             }
 
             Spacer(Modifier.height(20.dp))
-            SectionTitle(if (shownGif == null) "Pick a GIF" else "Change GIF")
+            SectionTitle(stringResource(if (shownGif == null) R.string.editor_pick else R.string.editor_change))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                 FilledTonalButton(
                     onClick = {
@@ -611,7 +657,7 @@ private fun EditorScreen(
                 ) {
                     Icon(painterResource(R.drawable.ic_photo_library), null, Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Gallery")
+                    Text(stringResource(R.string.editor_gallery))
                 }
                 OutlinedButton(
                     onClick = { filePicker.launch(arrayOf("image/*", "video/*")) },
@@ -621,32 +667,33 @@ private fun EditorScreen(
                 ) {
                     Icon(painterResource(R.drawable.ic_folder), null, Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Files")
+                    Text(stringResource(R.string.editor_files))
                 }
             }
 
             Spacer(Modifier.height(24.dp))
-            SectionTitle("Display")
+            SectionTitle(stringResource(R.string.editor_display))
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 ScaleMode.entries.forEachIndexed { index, mode ->
                     SegmentedButton(
                         selected = scaleMode == mode,
-                        onClick = { scaleMode = mode },
+                        onClick = {
+                            scaleMode = mode
+                            if (mode == ScaleMode.FIT) repositioning = false
+                        },
                         enabled = busy == null,
                         shape = SegmentedButtonDefaults.itemShape(index, ScaleMode.entries.size)
                     ) {
-                        Text(if (mode == ScaleMode.FIT) "Fit" else "Fill")
+                        Text(stringResource(if (mode == ScaleMode.FIT) R.string.mode_fit else R.string.mode_fill))
                     }
                 }
             }
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    if (scaleMode == ScaleMode.FIT) {
-                        "Shows the whole GIF, with empty space around it if needed."
-                    } else {
-                        "Covers the whole widget. Drag the preview to choose what stays in view."
-                    },
+                    stringResource(
+                        if (scaleMode == ScaleMode.FIT) R.string.editor_fit_description else R.string.editor_fill_description
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f)
@@ -655,8 +702,30 @@ private fun EditorScreen(
                     TextButton(onClick = { cropCenter = Offset(0.5f, 0.5f) }, enabled = busy == null) {
                         Icon(painterResource(R.drawable.ic_recenter), null, Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Re-center")
+                        Text(stringResource(R.string.editor_recenter))
                     }
+                }
+            }
+
+            // Android 8-11 don't round widget corners, so a Fill picture's corners are square there.
+            // Newer versions never see this switch.
+            AnimatedVisibility(visible = WidgetSizes.needsRoundedFrames && scaleMode == ScaleMode.FILL) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp)
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.editor_round_corners), style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            stringResource(R.string.editor_round_corners_description),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Switch(checked = roundCorners, onCheckedChange = { roundCorners = it }, enabled = busy == null)
                 }
             }
 
@@ -693,8 +762,8 @@ private fun SectionTitle(text: String) {
 }
 
 /**
- * The widget-shaped preview. In Fill mode you can drag it to move the picture around;
- * a crop grid fades in while your finger is down.
+ * The widget-shaped preview. In Fill mode the picture is locked, so a stray swipe can't move it:
+ * the "Reposition" button switches to [CropView], where you choose what stays in view.
  */
 @Composable
 private fun Preview(
@@ -704,104 +773,172 @@ private fun Preview(
     aspectRatio: Float,
     cropCenter: () -> Offset,
     onCropCenterChange: (Offset) -> Unit,
-    dragEnabled: Boolean
+    squareCorners: Boolean,
+    repositioning: Boolean,
+    canReposition: Boolean,
+    onStartReposition: () -> Unit,
+    onEndReposition: (keep: Boolean) -> Unit
 ) {
-    var boxSize by remember { mutableStateOf(IntSize.Zero) }
-    var dragging by remember { mutableStateOf(false) }
-    val gridAlpha by animateFloatAsState(if (dragging) 1f else 0f, label = "grid")
-    val canDrag = image != null && scaleMode == ScaleMode.FILL && dragEnabled
-    // Only the picture's shape matters for dragging; the frames all have the same one.
-    val imageSize = image?.let { IntSize(it.width, it.height) }
+    val cornerRadius by animateDpAsState(if (squareCorners) 0.dp else 24.dp, label = "corners")
 
     BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         // As wide as the screen allows, but never taller than 380dp (for tall widgets).
         val width = min(maxWidth, 380.dp * aspectRatio)
-        Box(
-            modifier = Modifier
-                .width(width)
-                .aspectRatio(aspectRatio)
-                .clip(RoundedCornerShape(24.dp))
-                .background(background.toComposeColor())
-                .onSizeChanged { boxSize = it }
-                .pointerInput(canDrag, imageSize, boxSize) {
-                    if (!canDrag || imageSize == null) return@pointerInput
-                    detectDragGestures(
-                        onDragStart = { dragging = true },
-                        onDragEnd = { dragging = false },
-                        onDragCancel = { dragging = false }
-                    ) { change, amount ->
-                        change.consume()
-                        // Moving your finger right moves the picture right, so the center moves left.
-                        val spot = fillPlacement(
-                            boxSize.width, boxSize.height, imageSize.width, imageSize.height, cropCenter()
-                        )
-                        val halfX = boxSize.width / 2f / spot.width
-                        val halfY = boxSize.height / 2f / spot.height
-                        val current = cropCenter()
-                        onCropCenterChange(
-                            Offset(
-                                (current.x - amount.x / spot.width).coerceIn(halfX, 1f - halfX),
-                                (current.y - amount.y / spot.height).coerceIn(halfY, 1f - halfY)
-                            )
-                        )
-                    }
-                }
-        ) {
-            // Fades in when the first frame is ready; frames then simply replace each other.
+        val height = width / aspectRatio
+        val fullWidth = maxWidth
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             AnimatedContent(
-                targetState = image != null,
+                targetState = repositioning && image != null,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "preview"
-            ) { hasImage ->
-                if (hasImage && image != null) {
-                    FrameImage(image, scaleMode, cropCenter, Modifier.fillMaxSize())
+                label = "reposition"
+            ) { cropping ->
+                if (cropping && image != null) {
+                    // Same height as the preview, but the full width: room to show the whole picture.
+                    CropView(image, aspectRatio, cropCenter, onCropCenterChange, Modifier.size(fullWidth, height))
                 } else {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                        modifier = Modifier.fillMaxSize()
+                    Box(
+                        modifier = Modifier
+                            .width(width)
+                            .aspectRatio(aspectRatio)
+                            .clip(RoundedCornerShape(cornerRadius))
+                            .background(background.toComposeColor())
                     ) {
-                        Image(painterResource(R.drawable.widget_placeholder), null, Modifier.size(56.dp))
-                        Spacer(Modifier.height(8.dp))
-                        Text("Your GIF will play here", color = Color.White.copy(alpha = 0.7f))
+                        // Fades in when the first frame is ready; frames then simply replace each other.
+                        AnimatedContent(
+                            targetState = image != null,
+                            transitionSpec = { fadeIn() togetherWith fadeOut() },
+                            label = "preview"
+                        ) { hasImage ->
+                            if (hasImage && image != null) {
+                                FrameImage(image, scaleMode, cropCenter, Modifier.fillMaxSize())
+                            } else {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center,
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    Image(painterResource(R.drawable.widget_placeholder), null, Modifier.size(56.dp))
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(stringResource(R.string.editor_preview_empty), color = Color.White.copy(alpha = 0.7f))
+                                }
+                            }
+                        }
+
+                        // Fill mode: the button that unlocks moving the picture.
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = canReposition,
+                            enter = fadeIn(),
+                            exit = fadeOut(),
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(10.dp)
+                        ) {
+                            Surface(
+                                onClick = onStartReposition,
+                                shape = RoundedCornerShape(50),
+                                color = Color.Black.copy(alpha = 0.6f),
+                                contentColor = Color.White
+                            ) {
+                                Text(
+                                    stringResource(R.string.editor_reposition),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
 
-            // Rule-of-thirds grid, like a photo crop tool, shown while dragging.
-            if (gridAlpha > 0f) {
-                Canvas(Modifier.fillMaxSize()) {
-                    val color = Color.White.copy(alpha = 0.6f * gridAlpha)
-                    for (i in 1..2) {
-                        val x = size.width * i / 3
-                        val y = size.height * i / 3
-                        drawLine(color, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.dp.toPx())
-                        drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
-                    }
-                }
-            }
-
-            // Hint shown in Fill mode until you start dragging.
-            AnimatedVisibility(
-                visible = canDrag && !dragging,
-                enter = fadeIn(),
-                exit = fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(10.dp)
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = Color.Black.copy(alpha = 0.55f),
-                    contentColor = Color.White
+            // While repositioning: keep the new spot, or go back to where it was.
+            AnimatedVisibility(visible = repositioning && image != null) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.padding(top = 12.dp)
                 ) {
-                    Text(
-                        "Drag to reposition",
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    OutlinedButton(onClick = { onEndReposition(false) }) {
+                        Text(stringResource(R.string.editor_reposition_cancel))
+                    }
+                    Button(onClick = { onEndReposition(true) }) {
+                        Text(stringResource(R.string.editor_reposition_done))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Choosing what a Fill widget shows: the whole picture, with a widget-shaped window over it.
+ * Everything outside the window is dimmed (that's what the widget won't show). Drag to move the window.
+ */
+@Composable
+private fun CropView(
+    image: ImageBitmap,
+    aspectRatio: Float,
+    cropCenter: () -> Offset,
+    onCropCenterChange: (Offset) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var boxSize by remember { mutableStateOf(IntSize.Zero) }
+    // Where the whole picture sits in this view (fitted, centered) and how much it's scaled.
+    fun pictureScale() = kotlin.math.min(boxSize.width / image.width.toFloat(), boxSize.height / image.height.toFloat())
+
+    Canvas(
+        modifier
+            .onSizeChanged { boxSize = it }
+            .pointerInput(image.width, image.height, aspectRatio) {
+                detectDragGestures { change, amount ->
+                    change.consume()
+                    // The same window FrameExtractor will cut, so the drag limits match the real crop.
+                    val window = FrameExtractor.cropRect(image.width, image.height, Crop(0.5f, 0.5f, aspectRatio))
+                    val halfX = window.width() / 2f / image.width
+                    val halfY = window.height() / 2f / image.height
+                    val scale = pictureScale()
+                    val current = cropCenter()
+                    // Moving your finger right moves the window right.
+                    onCropCenterChange(
+                        Offset(
+                            (current.x + amount.x / (image.width * scale)).coerceIn(halfX, 1f - halfX),
+                            (current.y + amount.y / (image.height * scale)).coerceIn(halfY, 1f - halfY)
+                        )
                     )
                 }
             }
+    ) {
+        val scale = kotlin.math.min(size.width / image.width, size.height / image.height)
+        val shownWidth = image.width * scale
+        val shownHeight = image.height * scale
+        val left = (size.width - shownWidth) / 2
+        val top = (size.height - shownHeight) / 2
+        drawImage(
+            image = image,
+            dstOffset = IntOffset(left.roundToInt(), top.roundToInt()),
+            dstSize = IntSize(shownWidth.roundToInt(), shownHeight.roundToInt()),
+            filterQuality = FilterQuality.Medium
+        )
+
+        val center = cropCenter()
+        val crop = FrameExtractor.cropRect(image.width, image.height, Crop(center.x, center.y, aspectRatio))
+        val window = Rect(
+            left + crop.left * scale, top + crop.top * scale,
+            left + crop.right * scale, top + crop.bottom * scale
+        )
+        val corner = CornerRadius(12.dp.toPx())
+        // Dim everything outside the window.
+        val outside = Path().apply {
+            addRect(Rect(left, top, left + shownWidth, top + shownHeight))
+            op(this, Path().apply { addRoundRect(RoundRect(window, corner)) }, PathOperation.Difference)
+        }
+        drawPath(outside, Color.Black.copy(alpha = 0.6f))
+        drawRoundRect(Color.White, window.topLeft, window.size, corner, style = Stroke(2.dp.toPx()))
+        // Rule-of-thirds grid inside the window, like a photo crop tool.
+        val gridColor = Color.White.copy(alpha = 0.5f)
+        for (i in 1..2) {
+            val x = window.left + window.width * i / 3
+            val y = window.top + window.height * i / 3
+            drawLine(gridColor, Offset(x, window.top), Offset(x, window.bottom), strokeWidth = 1.dp.toPx())
+            drawLine(gridColor, Offset(window.left, y), Offset(window.right, y), strokeWidth = 1.dp.toPx())
         }
     }
 }
@@ -871,16 +1008,16 @@ private fun SaveBar(busy: Busy?, enabled: Boolean, label: String, onSave: () -> 
                     enabled = enabled,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp)
+                        .heightIn(min = 52.dp)
                 ) { Text(label, style = MaterialTheme.typography.titleSmall) }
 
                 Busy.OpeningVideo -> Progress(stringResource(R.string.progress_opening_video), 0, 0)
                 is Busy.Preparing -> if (state.video) {
                     Progress(stringResource(R.string.progress_reading_video), state.done, state.total, onCancel)
                 } else {
-                    Progress("Reading the GIF…", state.done, state.total)
+                    Progress(stringResource(R.string.progress_reading_file), state.done, state.total)
                 }
-                is Busy.Saving -> Progress("Preparing the widget…", state.done, state.total)
+                is Busy.Saving -> Progress(stringResource(R.string.progress_saving), state.done, state.total)
             }
         }
     }
@@ -892,10 +1029,13 @@ private fun Progress(text: String, done: Int, total: Int, onCancel: (() -> Unit)
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp)
+            .heightIn(min = 52.dp)
     ) {
         Column(verticalArrangement = Arrangement.Center, modifier = Modifier.weight(1f)) {
-            Text(if (total == 0) text else "$text $done / $total", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                if (total == 0) text else stringResource(R.string.progress_count, text, done, total),
+                style = MaterialTheme.typography.bodyMedium
+            )
             Spacer(Modifier.height(8.dp))
             if (total == 0) {
                 LinearProgressIndicator(Modifier.fillMaxWidth())

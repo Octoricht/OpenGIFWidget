@@ -4,7 +4,11 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
+import android.graphics.RectF
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.core.graphics.createBitmap
@@ -47,26 +51,34 @@ data class Crop(val centerX: Float, val centerY: Float, val aspectRatio: Float)
 /**
  * Turns pictures into frames, in two steps:
  * 1. [extractMasterFromGif]: decode the original once into "master" frames: uncropped,
- *    up to [MASTER_MAX_SIDE_PX], good quality. These are kept, and the original is not.
+ *    sized by [masterMaxSide] (at most [MASTER_MAX_SIDE_PX]). These are kept, and the original is not.
  * 2. [deriveWidgetFrames]: make the frames the widget actually shows from the master frames:
- *    cropped for Fill, at most [WIDGET_MAX_SIDE_PX], small WebP files.
+ *    cropped for Fill, within [FrameLimits] (smaller on low-RAM phones), small WebP files.
  * Changing Fit/Fill or the crop only repeats step 2, so the original is never needed again.
  */
 object FrameExtractor {
 
     // Master frames are bigger than widget frames so that a Fill crop still has detail left.
     private const val MASTER_MAX_SIDE_PX = 768
-    private const val MASTER_QUALITY = 90
+    private const val MASTER_MIN_SIDE_PX = 256
+    private const val MASTER_QUALITY = 85
+
+    /**
+     * How big master frames need to be. The memory budget makes widget frames smaller when there
+     * are many of them (e.g. 90 frames -> about 300 px), so masters only need about twice that
+     * (room for a Fill crop), not the full 768 px. Saves a lot of storage on long animations.
+     */
+    fun masterMaxSide(frameCount: Int, limits: FrameLimits): Int {
+        val widgetSide = sqrt(limits.maxTotalPixels / frameCount.coerceAtLeast(1).toDouble())
+        return (2 * widgetSide).roundToInt().coerceIn(MASTER_MIN_SIDE_PX, MASTER_MAX_SIDE_PX)
+    }
     const val MAX_FRAMES = 150
 
     // The launcher holds ALL widget frames in memory at once, so these stay small.
-    private const val WIDGET_MAX_SIDE_PX = 512
     private const val WIDGET_QUALITY = 80
-    private const val MAX_TOTAL_PIXELS = 8_000_000 // about 32 MB of bitmaps in the launcher
 
     // Still pictures: only one bitmap in the launcher, so they can be much sharper.
     private const val STILL_MASTER_MAX_SIDE_PX = 1620 // room for a Fill crop
-    private const val STILL_WIDGET_MAX_SIDE_PX = 1080
     private const val STILL_QUALITY = 90
     private const val STILL_INTERVAL_MS = 1000 // unused for display; a still has one frame
 
@@ -79,6 +91,7 @@ object FrameExtractor {
         gifFile: File,
         outDir: File,
         version: Long,
+        limits: FrameLimits = FrameLimits.NORMAL,
         onProgress: (done: Int, total: Int) -> Unit
     ): FrameSet {
         val decoder = GifDecoder(InputSource.FileSource(gifFile))
@@ -94,7 +107,7 @@ object FrameExtractor {
             val step = max(1, ceil(sourceCount / MAX_FRAMES.toDouble()).toInt())
             val keptIndices = (0 until sourceCount step step).toList()
 
-            val scale = min(1.0, MASTER_MAX_SIDE_PX / max(width, height).toDouble())
+            val scale = min(1.0, masterMaxSide(keptIndices.size, limits) / max(width, height).toDouble())
             val outWidth = max(1, (width * scale).roundToInt())
             val outHeight = max(1, (height * scale).roundToInt())
 
@@ -153,14 +166,16 @@ object FrameExtractor {
         startMs: Long,
         lengthMs: Long,
         fps: Int,
+        limits: FrameLimits = FrameLimits.NORMAL,
         onProgress: (done: Int, total: Int) -> Unit
     ): FrameSet = coroutineScope {
         val count = VideoSource.frameCount(lengthMs, fps)
+        val maxSide = masterMaxSide(count, limits)
         val stepMs = lengthMs.toDouble() / count
         val times = List(count) { startMs + (it * stepMs).roundToLong() }
         outDir.mkdirs()
-        val size = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) videoInBatches(openVideo, times, outDir, onProgress) else null)
-            ?: videoFrameByFrame(openVideo, times, outDir, onProgress)
+        val size = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) videoInBatches(openVideo, times, outDir, maxSide, onProgress) else null)
+            ?: videoFrameByFrame(openVideo, times, outDir, maxSide, onProgress)
         FrameSet(
             version = version,
             frameCount = count,
@@ -180,6 +195,7 @@ object FrameExtractor {
         openVideo: () -> VideoSource,
         times: List<Long>,
         outDir: File,
+        maxSide: Int,
         onProgress: (Int, Int) -> Unit
     ): Pair<Int, Int>? = withContext(Dispatchers.IO) {
         openVideo().use { video ->
@@ -193,7 +209,7 @@ object FrameExtractor {
                     ensureActive()
                     val first = wanted[next]
                     val count = min(video.batchSize(), total - first)
-                    val batch = video.framesAtIndex(first, count, MASTER_MAX_SIDE_PX)
+                    val batch = video.framesAtIndex(first, count, maxSide)
                     if (batch.isEmpty()) return@withContext null
                     try {
                         // Every saved frame whose frame number falls inside this batch...
@@ -230,6 +246,7 @@ object FrameExtractor {
         openVideo: () -> VideoSource,
         times: List<Long>,
         outDir: File,
+        maxSide: Int,
         onProgress: (Int, Int) -> Unit
     ): Pair<Int, Int> = coroutineScope {
         val count = times.size
@@ -243,8 +260,8 @@ object FrameExtractor {
                     for (index in worker until count step workers) {
                         ensureActive() // stop here if cancelled
                         // Near the very end a video may have no picture: use the last one there is.
-                        val frame = video.frameAt(times[index], MASTER_MAX_SIDE_PX)
-                            ?: video.frameAt(maxOf(0L, video.info.durationMs - 100), MASTER_MAX_SIDE_PX)
+                        val frame = video.frameAt(times[index], maxSide)
+                            ?: video.frameAt(maxOf(0L, video.info.durationMs - 100), maxSide)
                             ?: throw ImportException(R.string.error_unsupported_video)
                         try {
                             size = frame.width to frame.height
@@ -286,6 +303,9 @@ object FrameExtractor {
         outDir: File,
         version: Long,
         crop: Crop?,
+        limits: FrameLimits = FrameLimits.NORMAL,
+        widgetMaxSidePx: Int? = null, // the widget's longest side on screen, if known
+        cornerRadiusFraction: Float = 0f, // > 0: cut rounded corners (radius = this x frame width)
         onProgress: (done: Int, total: Int) -> Unit
     ): FrameSet {
         val source = if (crop == null) {
@@ -296,11 +316,14 @@ object FrameExtractor {
 
         // Shrink to the size limit, then more if all frames together are still too big.
         val still = master.frameCount == 1
-        val maxSide = if (still) STILL_WIDGET_MAX_SIDE_PX else WIDGET_MAX_SIDE_PX
+        // Never bigger than the widget shows them (if we know its size), nor than the phone's limit.
+        val limitSide = if (still) limits.stillMaxSidePx else limits.animationMaxSidePx
+        val maxSide = if (widgetMaxSidePx != null && widgetMaxSidePx > 0) minOf(limitSide, widgetMaxSidePx) else limitSide
         val quality = if (still) STILL_QUALITY else WIDGET_QUALITY
         var scale = min(1.0, maxSide / max(source.width(), source.height()).toDouble())
         val totalPixels = master.frameCount * (source.width() * scale) * (source.height() * scale)
-        if (totalPixels > MAX_TOTAL_PIXELS) scale *= sqrt(MAX_TOTAL_PIXELS / totalPixels)
+        // (The launcher holds all frames in memory at once: about 4 bytes per pixel.)
+        if (totalPixels > limits.maxTotalPixels) scale *= sqrt(limits.maxTotalPixels / totalPixels)
         val outWidth = max(1, (source.width() * scale).roundToInt())
         val outHeight = max(1, (source.height() * scale).roundToInt())
 
@@ -309,6 +332,19 @@ object FrameExtractor {
         val canvas = Canvas(output)
         val paint = Paint(Paint.FILTER_BITMAP_FLAG)
         val target = Rect(0, 0, outWidth, outHeight)
+        // Rounded corners (for Android 8-11, which don't round widgets): the four corner areas,
+        // erased after each frame is drawn. Anti-aliased, so the edges stay smooth.
+        val corners = if (cornerRadiusFraction > 0f) {
+            val radius = cornerRadiusFraction * outWidth
+            val full = RectF(0f, 0f, outWidth.toFloat(), outHeight.toFloat())
+            Path().apply {
+                addRect(full, Path.Direction.CW)
+                op(Path().apply { addRoundRect(full, radius, radius, Path.Direction.CW) }, Path.Op.DIFFERENCE)
+            }
+        } else {
+            null
+        }
+        val erasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT) }
         var masterFrame: Bitmap? = null
         try {
             for (index in 0 until master.frameCount) {
@@ -317,6 +353,7 @@ object FrameExtractor {
                     ?: throw ImportException(R.string.error_frames_missing)
                 output.eraseColor(Color.TRANSPARENT)
                 canvas.drawBitmap(masterFrame, source, target, paint)
+                if (corners != null) canvas.drawPath(corners, erasePaint)
                 FrameFiles.writeWebp(output, File(outDir, FrameFiles.frameFileName(index)), quality)
                 onProgress(index + 1, master.frameCount)
             }

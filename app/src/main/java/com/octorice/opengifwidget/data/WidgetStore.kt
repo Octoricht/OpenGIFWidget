@@ -84,6 +84,38 @@ object WidgetStore {
         if (keys.isNotEmpty()) prefs.edit { keys.forEach { remove(it) } }
     }
 
+    /**
+     * The widget size (longest side in px, 0 = unknown) and shape the current frames were made for,
+     * so a resize can tell whether they need remaking.
+     */
+    fun getFramesFit(context: Context, appWidgetId: Int): Pair<Int, Float> {
+        val prefs = prefs(context)
+        return prefs.getInt("fit_px_$appWidgetId", 0) to prefs.getFloat("fit_aspect_$appWidgetId", 0f)
+    }
+
+    fun saveFramesFit(context: Context, appWidgetId: Int, sidePx: Int, aspect: Float, rounded: Boolean) {
+        prefs(context).edit {
+            putInt("fit_px_$appWidgetId", sidePx)
+            putFloat("fit_aspect_$appWidgetId", aspect)
+            putBoolean("fit_round_$appWidgetId", rounded)
+        }
+    }
+
+    /** Whether the current frames have rounded corners cut in (Android 8-11 only). */
+    fun getFramesRounded(context: Context, appWidgetId: Int): Boolean =
+        prefs(context).getBoolean("fit_round_$appWidgetId", false)
+
+    /**
+     * The "Rounded corners" switch (only shown on Android 8-11, which don't round widgets themselves).
+     * On by default.
+     */
+    fun getRoundCorners(context: Context, appWidgetId: Int): Boolean =
+        prefs(context).getBoolean("round_$appWidgetId", true)
+
+    fun saveRoundCorners(context: Context, appWidgetId: Int, round: Boolean) {
+        prefs(context).edit { putBoolean("round_$appWidgetId", round) }
+    }
+
     /** Playback speed of the widget's animation, from 0.25x to 3x. Normal speed (1x) by default. */
     fun getSpeed(context: Context, appWidgetId: Int): Float =
         prefs(context).getFloat("speed_$appWidgetId", 1f).coerceIn(MIN_SPEED, MAX_SPEED)

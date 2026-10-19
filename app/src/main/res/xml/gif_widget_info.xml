@@ -5,7 +5,8 @@
     minWidth/minHeight = default size on Android 11 and older (110dp is about 2x2 cells).
     targetCellWidth/Height = default size on Android 12+.
     minResizeWidth/Height = smallest size when resizing (40dp is about 1x1).
-    No max size is set, so it can grow to fill the whole screen.
+    maxResizeWidth/Height = largest size (Android 12+); 2000dp means "as big as the screen allows".
+    previewImage / previewLayout = the picture shown in the launcher's widget list (old / Android 12+).
     configure = the screen that opens when the widget is added.
     widgetFeatures="reconfigurable" = Android 12+ launchers may offer "reconfigure" on long-press.
 -->
@@ -17,8 +18,10 @@
     android:minHeight="110dp"
     android:minResizeWidth="40dp"
     android:minResizeHeight="40dp"
-    android:previewImage="@drawable/widget_placeholder"
-    android:previewLayout="@layout/widget_gif"
+    android:maxResizeWidth="2000dp"
+    android:maxResizeHeight="2000dp"
+    android:previewImage="@drawable/widget_preview"
+    android:previewLayout="@layout/widget_preview"
     android:resizeMode="horizontal|vertical"
     android:targetCellWidth="2"
     android:targetCellHeight="2"

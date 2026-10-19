@@ -21,9 +21,11 @@ android {
 
     buildTypes {
         release {
+            // Shrink and optimize the whole app with R8 (smaller, faster APK). The template limited this
+            // to androidx/kotlin packages, which made R8 produce an APK that crashed at startup
+            // (IllegalAccessError between optimized and non-optimized classes).
             optimization {
                 enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
             }
         }
     }

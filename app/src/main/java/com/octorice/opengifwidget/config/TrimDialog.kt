@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -40,15 +42,13 @@ import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.min
 
-/** Longest clip a video widget can have. */
-const val MAX_CLIP_MS = 5_000L
 private const val MIN_CLIP_MS = 500L
 
 /** Which slider is being dragged right now, if any. */
 private enum class Scrubbing { START, END }
 
 /**
- * Picks which part of a video becomes the widget: a start time and a length (up to 5 s).
+ * Picks which part of a video becomes the widget: a start time and a length (up to 2-3 s, by phone tier).
  * The preview plays the chosen clip in a loop; while you drag a slider it stops and shows the
  * exact frame you're on (the first frame for Start, the last frame for Length).
  * [loadFrame] gives a still frame, used only if this phone can't play the video live.
@@ -58,6 +58,7 @@ fun TrimDialog(
     uri: Uri,
     info: VideoInfo,
     fpsCap: Int,
+    maxClipMs: Long, // longest clip this phone allows (2-3 s, see DeviceTier)
     loadFrame: suspend (timeMs: Long) -> Bitmap?,
     onCancel: () -> Unit,
     onConfirm: (startMs: Long, lengthMs: Long) -> Unit
@@ -65,10 +66,10 @@ fun TrimDialog(
     val duration = info.durationMs
     val minLength = min(MIN_CLIP_MS, duration)
     var startMs by remember { mutableFloatStateOf(0f) }
-    var lengthMs by remember { mutableFloatStateOf(min(MAX_CLIP_MS, duration).toFloat()) }
+    var lengthMs by remember { mutableFloatStateOf(min(maxClipMs, duration).toFloat()) }
     var scrubbing by remember { mutableStateOf<Scrubbing?>(null) }
     val maxStart = (duration - minLength).coerceAtLeast(0L).toFloat()
-    val maxLength = min(MAX_CLIP_MS.toFloat(), duration - startMs).coerceAtLeast(minLength.toFloat())
+    val maxLength = min(maxClipMs.toFloat(), duration - startMs).coerceAtLeast(minLength.toFloat())
     val endMs = (startMs + lengthMs).toLong().coerceAtMost(duration)
     // The frame to hold while dragging; slightly before the end so it's a real picture.
     val scrubMs = when (scrubbing) {
@@ -81,7 +82,10 @@ fun TrimDialog(
         Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.padding(24.dp)
+                // Scrolls when the screen is short (e.g. a phone in landscape).
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp)
             ) {
                 Text(stringResource(R.string.trim_title), style = MaterialTheme.typography.headlineSmall)
 
@@ -151,7 +155,7 @@ fun TrimDialog(
                 Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                     TextButton(onClick = onCancel) { Text(stringResource(R.string.trim_cancel)) }
                     Button(onClick = {
-                        onConfirm(startMs.toLong(), lengthMs.toLong().coerceIn(minLength, min(MAX_CLIP_MS, duration)))
+                        onConfirm(startMs.toLong(), lengthMs.toLong().coerceIn(minLength, min(maxClipMs, duration)))
                     }) { Text(stringResource(R.string.trim_use)) }
                 }
             }

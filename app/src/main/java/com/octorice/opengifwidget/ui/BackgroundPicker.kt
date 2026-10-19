@@ -22,7 +22,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -65,6 +71,22 @@ private val Swatches = listOf(
 /** Color circles ("Transparent" first) and an opacity slider for the widget's background. */
 @Composable
 fun BackgroundPicker(background: WidgetBackground, enabled: Boolean, onChange: (WidgetBackground) -> Unit) {
+    var pickingColor by remember { mutableStateOf(false) }
+    // Picking a color after "Transparent" makes it visible again (solid).
+    fun choose(color: Int) = onChange(WidgetBackground(color, if (background.alpha == 0) 255 else background.alpha))
+    val custom = background.alpha > 0 && Swatches.none { it.color == background.color }
+
+    if (pickingColor) {
+        ColorPickerDialog(
+            initial = background.color,
+            onDismiss = { pickingColor = false },
+            onPick = {
+                pickingColor = false
+                choose(it)
+            }
+        )
+    }
+
     Column(Modifier.fillMaxWidth()) {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
@@ -75,13 +97,39 @@ fun BackgroundPicker(background: WidgetBackground, enabled: Boolean, onChange: (
                     onClick = { onChange(background.copy(alpha = 0)) }
                 ) { Checkerboard() }
             }
+            // Any color: a rainbow circle that opens the color picker. Once you've picked your own
+            // color, it shows that color in the middle.
+            item {
+                SwatchCircle(
+                    name = stringResource(R.string.color_custom),
+                    selected = custom,
+                    enabled = enabled,
+                    onClick = { pickingColor = true }
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(Brush.sweepGradient(RainbowColors)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (custom) {
+                            Box(
+                                Modifier
+                                    .fillMaxSize(0.55f)
+                                    .clip(CircleShape)
+                                    .background(Color(background.color))
+                                    .border(1.5.dp, Color.White, CircleShape)
+                            )
+                        }
+                    }
+                }
+            }
             items(Swatches) { swatch ->
                 SwatchCircle(
                     name = stringResource(swatch.name),
                     selected = background.alpha > 0 && background.color == swatch.color,
                     enabled = enabled,
-                    // Picking a color after "Transparent" makes it visible again (solid).
-                    onClick = { onChange(WidgetBackground(swatch.color, if (background.alpha == 0) 255 else background.alpha)) }
+                    onClick = { choose(swatch.color) }
                 ) {
                     Box(Modifier.fillMaxSize().background(Color(swatch.color)))
                 }
