@@ -53,6 +53,12 @@ RemoteViews can't play GIFs directly, so:
   the editor). So the editor sets `hidden_<id>` itself when it closes without saving and the widget has no picture.
   Launchers usually clean ghosts up on restart (then onDeleted runs).
 - New widgets default to Fill.
+- Widget shape (`WidgetSizes.currentSizeDp`): portrait = min width x max height, landscape = max width x min height.
+  Landscape only counts on big screens (smallestScreenWidthDp >= 600, e.g. tablets): phone home screens stay portrait
+  even when the app is rotated. After the tablet rotates, frames are remade on the next app open (shape changed > 10%).
+- `GifConfigActivity.EXTRA_ON_HOME_SCREEN`: set by the widget's tap intent and the app's list (widget already placed),
+  not by the launcher's add flow. Then the button says "Save" even before a picture is picked (Pixel places pinned
+  widgets without opening the editor), and closing without saving doesn't hide the widget as a ghost.
 - Videos (`gif/VideoSource`, `config/TrimDialog`): read in place with MediaMetadataRetriever (never copied, 1 GB limit),
   trim dialog (start + length, max 3 s, 2 s on low-end phones), frames taken at the FPS cap -> master frames like GIFs. Android 9+: batch decoding
   with `getFramesAtIndex` (batch size ~48 MB of full-size frames) + parallel WebP saving (~1.8 s for 150 frames); fallback:

@@ -60,6 +60,7 @@ class MainActivity : ComponentActivity() {
             Intent(this, GifConfigActivity::class.java)
                 .setAction(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE)
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                .putExtra(GifConfigActivity.EXTRA_ON_HOME_SCREEN, true)
         )
     }
 }

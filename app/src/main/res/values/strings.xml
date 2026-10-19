@@ -20,8 +20,8 @@
     <string name="home_storage_used">storage used</string>
     <string name="home_memory">home screen memory</string>
     <string name="home_heavy_tag">Heavy</string>
-    <string name="health_heavy_title">A bit heavy for this phone</string>
-    <string name="health_too_much_title">Too much for this phone</string>
+    <string name="health_heavy_title">A bit heavy for this device</string>
+    <string name="health_too_much_title">Too much for this device</string>
     <string name="health_memory">Your widgets keep about %1$s in your home screen\'s memory.</string>
     <string name="health_tip_cap_memory" tools:ignore="PluralsCandidate">An FPS cap of %1$d would bring that down to about %2$s.</string>
     <string name="health_tip_heavy_widget">Removing or shortening a widget tagged Heavy helps most.</string>
@@ -31,7 +31,7 @@
     </plurals>
     <string name="health_tip_cap_smooth" tools:ignore="PluralsCandidate">An FPS cap of %1$d would make it lighter.</string>
     <string name="health_tip_fewer">Fewer animated widgets on the same screen helps.</string>
-    <string name="health_storage">Your phone has only %1$s of free storage left. Free up some space to keep things running smoothly.</string>
+    <string name="health_storage">Your device has only %1$s of free storage left. Free up some space to keep things running smoothly.</string>
     <string name="health_open_settings">Open Settings</string>
     <plurals name="home_card_frames">
         <item quantity="one">%1$d frame · %2$s</item>
@@ -78,21 +78,21 @@
     <string name="error_too_large">This file is %1$s. The limit is %2$s.</string>
     <string name="error_cannot_open">Couldn\'t open that file. Try picking it again.</string>
     <string name="error_unsupported">This file couldn\'t be opened. It may be damaged, or its format isn\'t supported.</string>
-    <string name="error_no_space">Your phone is almost out of storage. Free up some space and try again.</string>
-    <string name="error_out_of_memory">This file is too big to process on this phone.</string>
+    <string name="error_no_space">Your device is almost out of storage. Free up some space and try again.</string>
+    <string name="error_out_of_memory">This file is too big to process on this device.</string>
     <string name="error_frames_missing">This widget\'s saved frames are missing. Pick the file again.</string>
     <string name="error_generic">Something went wrong. Please try again.</string>
 
     <!-- Home screen: removing a widget -->
     <string name="home_hint">Tap a widget to edit it. Long-press to remove it.</string>
     <string name="remove_title">Remove this widget?</string>
-    <string name="remove_message">Apps can\'t take widgets off your home screen, only your launcher can. If this widget is on your home screen, long-press it there and choose Remove.\n\nIf it isn\'t (a leftover from a setup you cancelled), you can remove it from this list. Restarting your phone also clears leftovers.</string>
+    <string name="remove_message">Apps can\'t take widgets off your home screen, only your launcher can. If this widget is on your home screen, long-press it there and choose Remove.\n\nIf it isn\'t (a leftover from a setup you cancelled), you can remove it from this list. Restarting your device also clears leftovers.</string>
     <string name="remove_confirm">Remove from list</string>
     <string name="remove_cancel">Cancel</string>
     <string name="remove_done">Removed from the list</string>
 
     <!-- Videos -->
-    <string name="error_unsupported_video">This video couldn\'t be opened. It may be damaged, or your phone can\'t play its format.</string>
+    <string name="error_unsupported_video">This video couldn\'t be opened. It may be damaged, or your device can\'t play its format.</string>
     <string name="trim_title">Choose a clip</string>
     <string name="trim_start">Start: %1$s</string>
     <plurals name="trim_length">
@@ -123,10 +123,10 @@
     <string name="settings_animation">Animation</string>
     <string name="settings_fps_cap">FPS cap</string>
     <string name="settings_fps_cap_description">The fastest any widget will play. Lower values save battery and keep your home screen smooth. Changing it updates all your widgets right away.</string>
-    <string name="settings_fps_cap_device_limit">Your phone works best at up to %1$d fps, so higher caps are turned off.</string>
+    <string name="settings_fps_cap_device_limit">Your device works best at up to %1$d fps, so higher caps are turned off.</string>
     <string name="settings_reliability">Reliability</string>
     <string name="settings_battery_title">A widget stopped animating?</string>
-    <string name="settings_battery_text">Some phones stop apps in the background to save battery, which can freeze widgets. If that happens, let OpenGIFWidget run without restrictions:\n\n• Samsung: App info › Battery › Unrestricted\n• Xiaomi, Redmi, POCO: App info › Autostart on, and Battery saver › No restrictions\n• OnePlus, OPPO, realme: App info › Battery usage › Allow background activity\n• Huawei, Honor: Battery › App launch › OpenGIFWidget › Manage manually\n\nRestarting your phone also redraws every widget.</string>
+    <string name="settings_battery_text">Some phones stop apps in the background to save battery, which can freeze widgets. If that happens, let OpenGIFWidget run without restrictions:\n\n• Samsung: App info › Battery › Unrestricted\n• Xiaomi, Redmi, POCO: App info › Autostart on, and Battery saver › No restrictions\n• OnePlus, OPPO, realme: App info › Battery usage › Allow background activity\n• Huawei, Honor: Battery › App launch › OpenGIFWidget › Manage manually\n\nRestarting your device also redraws every widget.</string>
     <string name="settings_battery_button">Open battery settings</string>
     <string name="settings_about">About</string>
     <string name="about_description">Picture, GIF &amp; video widgets, open source, no ads</string>

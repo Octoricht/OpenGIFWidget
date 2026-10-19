@@ -164,6 +164,7 @@ class GifWidgetProvider : AppWidgetProvider() {
             val intent = Intent(context, GifConfigActivity::class.java).apply {
                 action = AppWidgetManager.ACTION_APPWIDGET_CONFIGURE
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                putExtra(GifConfigActivity.EXTRA_ON_HOME_SCREEN, true) // tapped on the home screen
             }
             // requestCode = widget id, so each widget gets its own PendingIntent.
             return PendingIntent.getActivity(

@@ -225,9 +225,12 @@ private fun WidgetGrid(
     onLongPress: (WidgetSummary) -> Unit
 ) {
     val context = LocalContext.current
+    // Big screens (tablets: the shorter side is at least 600dp) get much bigger cards.
+    val window = LocalWindowInfo.current.containerSize
+    val bigScreen = with(LocalDensity.current) { minOf(window.width, window.height).toDp() } >= 600.dp
     LazyVerticalStaggeredGrid(
-        // As many columns as fit with cards at least 170dp wide: 2 on phones, more on tablets/landscape.
-        columns = StaggeredGridCells.Adaptive(minSize = 170.dp),
+        // As many columns as fit: phones 2 (cards at least 170dp wide), tablets 2-3 (at least 360dp).
+        columns = StaggeredGridCells.Adaptive(minSize = if (bigScreen) 360.dp else 170.dp),
         // Extra space at the bottom so the last cards aren't hidden behind the Add button.
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 104.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),

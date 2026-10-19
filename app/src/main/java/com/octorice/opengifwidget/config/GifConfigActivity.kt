@@ -146,13 +146,23 @@ import kotlin.math.roundToInt
  *
  * It works like an editor:
  * 1. Pick a file: it's decoded once into master frames (uncropped), which the preview plays.
- * 2. Choose Fit or Fill (and, for Fill, drag to choose what stays in view).
+ * 2. Choose Fit or Fill (and, for Fill, "Reposition" to choose what stays in view).
  * 3. Save: the widget's own frames are made from the master frames and the widget updates.
  */
 class GifConfigActivity : ComponentActivity() {
 
+    companion object {
+        /**
+         * Set when the widget is already on the home screen (opened by tapping it, or from the app's list).
+         * Not set when the launcher opens this while you're adding a widget.
+         */
+        const val EXTRA_ON_HOME_SCREEN = "com.octorice.opengifwidget.ON_HOME_SCREEN"
+    }
+
     private var appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
     private var savedSuccessfully = false // true once Save / "Add to home screen" succeeded
+    // Already placed (e.g. Pixel places pinned widgets without opening this): the button says "Save".
+    private var onHomeScreen = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -160,6 +170,7 @@ class GifConfigActivity : ComponentActivity() {
             AppWidgetManager.EXTRA_APPWIDGET_ID,
             AppWidgetManager.INVALID_APPWIDGET_ID
         ) ?: AppWidgetManager.INVALID_APPWIDGET_ID
+        onHomeScreen = intent?.getBooleanExtra(EXTRA_ON_HOME_SCREEN, false) == true
 
         // Default answer is "cancelled": if you press back, the launcher won't add the widget.
         setResult(RESULT_CANCELED, resultIntent())
@@ -189,6 +200,7 @@ class GifConfigActivity : ComponentActivity() {
             OpenGIFWidgetTheme {
                 EditorScreen(
                     saved = saved,
+                    onHomeScreen = onHomeScreen,
                     widgetAspectRatio = WidgetSizes.aspectRatio(this, appWidgetId),
                     fpsCap = AppSettings.getFpsCap(this),
                     framesDir = { version -> GifStorage.framesDir(this, appWidgetId, version) },
@@ -211,7 +223,8 @@ class GifConfigActivity : ComponentActivity() {
             // Setup cancelled before the widget ever got a picture: the launcher should now delete
             // this widget, but some (e.g. OnePlus) keep it as an invisible leftover. Hide it from
             // the app's list; saving a picture for it later shows it again.
-            if (!savedSuccessfully && WidgetStore.getGif(this, appWidgetId)?.frames == null) {
+            // (A widget that's already on the home screen is real, so it stays in the list.)
+            if (!savedSuccessfully && !onHomeScreen && WidgetStore.getGif(this, appWidgetId)?.frames == null) {
                 WidgetStore.setHidden(this, appWidgetId, true)
             }
         }
@@ -381,6 +394,7 @@ private class OpenedVideo(val source: VideoSource, val uri: Uri, val file: Impor
 @Composable
 private fun EditorScreen(
     saved: SavedSettings,
+    onHomeScreen: Boolean,
     widgetAspectRatio: Float,
     fpsCap: Int,
     framesDir: (version: Long) -> File,
@@ -564,7 +578,8 @@ private fun EditorScreen(
                 busy = busy,
                 // Finish repositioning first (Done or Cancel), so a half-done move is never saved.
                 enabled = master != null && busy == null && !repositioning,
-                label = stringResource(if (saved.gif == null) R.string.editor_add else R.string.editor_save),
+                // "Add to home screen" only while adding a widget; once it's placed, it's "Save".
+                label = stringResource(if (saved.gif == null && !onHomeScreen) R.string.editor_add else R.string.editor_save),
                 onSave = ::onSave,
                 onCancel = { videoJob?.cancel() }
             )
@@ -1000,6 +1015,9 @@ private fun SaveBar(busy: Busy?, enabled: Boolean, label: String, onSave: () -> 
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
+                // On tablets and in landscape, the same readable width as the rest of the screen.
+                .wrapContentWidth()
+                .widthIn(max = 640.dp)
                 .padding(horizontal = 20.dp, vertical = 14.dp)
         ) { state ->
             when (state) {
