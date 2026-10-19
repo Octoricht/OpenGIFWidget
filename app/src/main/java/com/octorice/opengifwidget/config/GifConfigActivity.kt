@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import android.content.Context
 import android.text.format.Formatter
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -118,6 +119,7 @@ import com.octorice.opengifwidget.ui.theme.OpenGIFWidgetTheme
 import com.octorice.opengifwidget.widget.GifWidgetProvider
 import com.octorice.opengifwidget.widget.WidgetFrames
 import com.octorice.opengifwidget.widget.WidgetSizes
+import com.octorice.opengifwidget.home.UsageHealth
 import com.octorice.opengifwidget.gif.Crop
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
@@ -332,11 +334,28 @@ class GifConfigActivity : ComponentActivity() {
         val master = gif.master ?: throw ImportException(R.string.error_frames_missing)
         var frames = gif.frames
         if (remakeFrames || frames == null) {
+            // Never fill the device's storage to the brim with new frames.
+            if (GifStorage.freeStorageBytes(context) < UsageHealth.VERY_LOW_STORAGE_BYTES) {
+                throw ImportException(R.string.error_no_space)
+            }
+            // Remembered so a rejected save (below) leaves everything as it was.
+            val oldFit = WidgetStore.getFramesFit(context, appWidgetId)
+            val oldRounded = WidgetStore.getFramesRounded(context, appWidgetId)
             // Sized and shaped for the widget as it is on the home screen right now.
-            frames = WidgetFrames.make(
+            val made = WidgetFrames.make(
                 context, appWidgetId, master, settings.scaleMode,
                 settings.cropCenter.x to settings.cropCenter.y, settings.roundCorners, onProgress
             )
+            try {
+                checkMemoryLimit(context, made, settings.speed)
+            } catch (e: ImportException) {
+                GifStorage.framesDir(context, appWidgetId, made.version).deleteRecursively()
+                WidgetStore.saveFramesFit(context, appWidgetId, oldFit.first, oldFit.second, oldRounded)
+                throw e
+            }
+            frames = made
+        } else {
+            checkMemoryLimit(context, frames, settings.speed) // e.g. a slower speed shows more frames
         }
 
         WidgetStore.saveGif(context, appWidgetId, gif.copy(frames = frames, master = master))
@@ -350,6 +369,28 @@ class GifConfigActivity : ComponentActivity() {
         WidgetStore.setHidden(context, appWidgetId, false) // set up again: show it in the app's list
         GifStorage.deleteFramesExcept(context, appWidgetId, setOf(master.version, frames.version))
         GifWidgetProvider.updateWidget(context, AppWidgetManager.getInstance(context), appWidgetId)
+    }
+
+    /**
+     * Refuses a save that would push the home screen past the memory limit ([UsageHealth.memoryLimitBytes]).
+     * A change that makes this widget lighter (or no heavier) is always allowed, even when already over:
+     * widgets you have are never blocked from getting lighter.
+     */
+    private fun checkMemoryLimit(context: Context, frames: FrameSet, speed: Float) {
+        val fpsCap = AppSettings.getFpsCap(context)
+        val newCost = UsageHealth.widgetCost(frames, speed, fpsCap).first
+        val oldCost = WidgetStore.getGif(context, appWidgetId)?.frames
+            ?.let { UsageHealth.widgetCost(it, WidgetStore.getSpeed(context, appWidgetId), fpsCap).first } ?: 0L
+        if (newCost <= oldCost) return
+        val limit = UsageHealth.memoryLimitBytes(context)
+        val total = UsageHealth.memoryOfOthers(context, appWidgetId) + newCost
+        if (total > limit) {
+            throw ImportException(
+                R.string.error_home_screen_full,
+                Formatter.formatShortFileSize(context, total),
+                Formatter.formatShortFileSize(context, limit)
+            )
+        }
     }
 
     private fun finishWithSuccess() {

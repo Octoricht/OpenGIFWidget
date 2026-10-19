@@ -81,6 +81,7 @@
     <string name="error_no_space">Your device is almost out of storage. Free up some space and try again.</string>
     <string name="error_out_of_memory">This file is too big to process on this device.</string>
     <string name="error_frames_missing">This widget\'s saved frames are missing. Pick the file again.</string>
+    <string name="error_home_screen_full">Your home screen can't take more animation: this would use about %1$s of memory, and the limit on this device is %2$s. Try a lower FPS cap in Settings, a shorter clip or smaller GIF, or remove a widget you don't need.</string>
     <string name="error_generic">Something went wrong. Please try again.</string>
 
     <!-- Home screen: removing a widget -->

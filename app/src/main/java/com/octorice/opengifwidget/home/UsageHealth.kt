@@ -1,11 +1,16 @@
 package com.octorice.opengifwidget.home
 
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import com.octorice.opengifwidget.data.AppSettings
 import com.octorice.opengifwidget.data.DeviceProfile
+import com.octorice.opengifwidget.data.DeviceTier
+import com.octorice.opengifwidget.data.WidgetStore
 import com.octorice.opengifwidget.data.GifStorage
 import com.octorice.opengifwidget.gif.FrameLimits
 import com.octorice.opengifwidget.gif.FrameSet
+import com.octorice.opengifwidget.widget.GifWidgetProvider
 import com.octorice.opengifwidget.widget.Playback
 import kotlin.math.roundToInt
 
@@ -46,7 +51,31 @@ data class Health(
 object UsageHealth {
 
     private const val LOW_STORAGE_BYTES = 1_000_000_000L      // 1 GB
-    private const val VERY_LOW_STORAGE_BYTES = 300_000_000L   // 300 MB
+    const val VERY_LOW_STORAGE_BYTES = 300_000_000L           // 300 MB: below this, no new frames are saved
+
+    /**
+     * The hard limit: past this much estimated launcher memory, the editor won't save a heavier widget.
+     * 8% of RAM, but 5% on low-RAM phones: the system itself takes a fixed chunk (often 1-1.5 GB),
+     * so a small phone has much less truly free memory than the percentage suggests.
+     * (12 GB phone: ~1 GB. 4 GB tablet: ~320 MB. 2 GB phone: ~100 MB.) Twice the red warning
+     * (4%) on normal phones, so nobody hits it by surprise.
+     */
+    fun memoryLimitBytes(context: Context): Long {
+        val percent = if (DeviceProfile.tier(context) == DeviceTier.LOW) 5 else 8
+        return DeviceProfile.totalRamBytes(context) / 100 * percent
+    }
+
+    /** Estimated launcher memory of every widget on the home screen except [appWidgetId]. */
+    fun memoryOfOthers(context: Context, appWidgetId: Int): Long {
+        val fpsCap = AppSettings.getFpsCap(context)
+        return AppWidgetManager.getInstance(context)
+            .getAppWidgetIds(ComponentName(context, GifWidgetProvider::class.java))
+            .filter { it != appWidgetId }
+            .sumOf { id ->
+                WidgetStore.getGif(context, id)?.frames
+                    ?.let { widgetCost(it, WidgetStore.getSpeed(context, id), fpsCap).first } ?: 0L
+            }
+    }
 
     /** Launcher memory and flips per second of one widget, with this speed and FPS cap. */
     fun widgetCost(frames: FrameSet, speed: Float, fpsCap: Int): Pair<Long, Float> {
