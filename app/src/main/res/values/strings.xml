@@ -18,11 +18,11 @@
         <item quantity="other">widgets</item>
     </plurals>
     <string name="home_storage_used">storage used</string>
-    <string name="home_memory">home screen memory</string>
+    <string name="home_memory">home screen RAM</string>
     <string name="home_heavy_tag">Heavy</string>
     <string name="health_heavy_title">A bit heavy for this device</string>
     <string name="health_too_much_title">Too much for this device</string>
-    <string name="health_memory">Your widgets keep about %1$s in your home screen\'s memory.</string>
+    <string name="health_memory">Your widgets keep about %1$s in your home screen\'s RAM.</string>
     <string name="health_tip_cap_memory" tools:ignore="PluralsCandidate">An FPS cap of %1$d would bring that down to about %2$s.</string>
     <string name="health_tip_heavy_widget">Removing or shortening a widget tagged Heavy helps most.</string>
     <plurals name="health_animation">
@@ -32,7 +32,33 @@
     <string name="health_tip_cap_smooth" tools:ignore="PluralsCandidate">An FPS cap of %1$d would make it lighter.</string>
     <string name="health_tip_fewer">Fewer animated widgets on the same screen helps.</string>
     <string name="health_storage">Your device has only %1$s of free storage left. Free up some space to keep things running smoothly.</string>
-    <string name="health_open_settings">Open Settings</string>
+    <string name="health_tap_details">Tap for details</string>
+    <string name="health_tap_actions">Tap to see what you can do</string>
+
+    <!-- The panel that opens from the main screen's header -->
+    <string name="sheet_title">Your widgets at a glance</string>
+    <plurals name="sheet_widgets_title">
+        <item quantity="one">%1$d widget</item>
+        <item quantity="other">%1$d widgets</item>
+    </plurals>
+    <string name="sheet_widgets_text">OpenGIFWidget widgets on your home screen.</string>
+    <string name="sheet_storage_title">%1$s of storage</string>
+    <string name="sheet_storage_text">Space the widgets\' frames take on this device. The pictures and videos you picked aren\'t copied, only these frames are kept.</string>
+    <string name="sheet_ram_title">%1$s of home screen RAM</string>
+    <string name="sheet_ram_text">RAM your home screen app needs to keep every animation ready to play. It\'s an estimate: Android doesn\'t let apps see another app\'s real RAM use.</string>
+    <string name="sheet_ram_limit">%1$s of the %2$s limit on this device. Past the limit, new or heavier widgets can\'t be saved, to keep your device smooth.</string>
+    <string name="sheet_actions_title">What you can do</string>
+    <string name="sheet_action_cap_title" tools:ignore="PluralsCandidate">Lower the FPS cap to %1$d</string>
+    <string name="sheet_action_cap_saves" tools:ignore="PluralsCandidate">Saves about %1$s of RAM. Animations play a bit less smoothly than at %2$d fps. You can change it back in Settings.</string>
+    <string name="sheet_action_cap_smoother" tools:ignore="PluralsCandidate">Fewer frame changes per second than at %1$d fps, so your home screen has less to do. You can change it back in Settings.</string>
+    <string name="sheet_action_cap_button">Apply</string>
+    <string name="sheet_action_heavy_title">Make a heavy widget lighter</string>
+    <string name="sheet_action_heavy_text">Your heaviest widgets. Tap one to edit it: a shorter clip or a smaller GIF helps most.</string>
+    <string name="sheet_action_remove_title">Remove widgets you don\'t use</string>
+    <string name="sheet_action_remove_text">Only your home screen app can remove widgets: long-press the widget on your home screen and choose Remove.</string>
+    <string name="sheet_action_storage_title">Free up storage</string>
+    <string name="sheet_action_storage_text">Your device has only %1$s of free storage left.</string>
+    <string name="sheet_action_storage_button">Open storage settings</string>
     <plurals name="home_card_frames">
         <item quantity="one">%1$d frame · %2$s</item>
         <item quantity="other">%1$d frames · %2$s</item>
@@ -81,7 +107,7 @@
     <string name="error_no_space">Your device is almost out of storage. Free up some space and try again.</string>
     <string name="error_out_of_memory">This file is too big to process on this device.</string>
     <string name="error_frames_missing">This widget\'s saved frames are missing. Pick the file again.</string>
-    <string name="error_home_screen_full">Your home screen can\'t take more animation: this would use about %1$s of memory, and the limit on this device is %2$s. Try a lower FPS cap in Settings, a shorter clip or smaller GIF, or remove a widget you don\'t need.</string>
+    <string name="error_home_screen_full">Your home screen can\'t take more animation: this would use about %1$s of RAM, and the limit on this device is %2$s. Try a lower FPS cap in Settings, a shorter clip or smaller GIF, or remove a widget you don\'t need.</string>
     <string name="error_generic">Something went wrong. Please try again.</string>
 
     <!-- Home screen: removing a widget -->

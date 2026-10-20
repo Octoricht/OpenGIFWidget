@@ -108,6 +108,10 @@ RemoteViews can't play GIFs directly, so:
   (after FPS cap/speed); amber > 2% of RAM, red > 4% (calibrated on a smooth 9-widget, ~175 MB setup on a 12 GB phone).
   Flips/s can only make it amber (> 8 x max FPS) because widgets on other pages are paused. Storage: amber < 1 GB free,
   red < 300 MB. "Heavy" tag (>= 60% of the per-widget budget) only when the header isn't blue. It's an estimate (no access to the launcher's real memory).
+- Health panel (`home/HealthSheet`, a bottom sheet opened by tapping the header): explains widgets / storage / home
+  screen RAM (with a bar: RAM used vs the hard limit). When amber/red, "What you can do": lower FPS cap (applied in place,
+  shows RAM saved), the 3 heaviest widgets (tap = editor), how to remove widgets, storage settings (storage problems).
+  Only actions the app can really do. User-facing text says "RAM", not "memory".
 - Hard limit (`UsageHealth.memoryLimitBytes`): 8% of RAM, 5% on LOW-tier devices (the OS takes a fixed 1-1.5 GB, so small
   phones have far less truly free memory). Checked in the editor's save (`checkMemoryLimit`): others + this widget's new
   cost > limit -> `error_home_screen_full`, new frames deleted, old fit info restored. A save that doesn't make the widget

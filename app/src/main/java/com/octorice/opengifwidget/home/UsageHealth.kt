@@ -24,7 +24,8 @@ enum class HealthReason { MEMORY, ANIMATION, STORAGE }
  * The verdict shown in the main screen's header.
  * [memoryBytes]: estimated launcher memory for all widgets; [memoryAtLowerCap]: the same with a
  * lower FPS cap ([lowerCap]), to suggest it; [flipsPerSecond]: all widgets together;
- * [heavyWidgetIds]: widgets that cost the most (tagged "Heavy" on their cards).
+ * [heavyWidgetIds]: widgets that cost the most (tagged "Heavy" on their cards);
+ * [limitBytes]: the hard limit (see [UsageHealth.memoryLimitBytes]); [widgetMemory]: each widget's share.
  */
 data class Health(
     val level: HealthLevel,
@@ -34,7 +35,9 @@ data class Health(
     val lowerCap: Int?,
     val flipsPerSecond: Int,
     val freeStorageBytes: Long,
-    val heavyWidgetIds: Set<Int>
+    val heavyWidgetIds: Set<Int>,
+    val limitBytes: Long,
+    val widgetMemory: Map<Int, Long>
 )
 
 /**
@@ -141,7 +144,9 @@ object UsageHealth {
             lowerCap = lowerCap,
             flipsPerSecond = flips,
             freeStorageBytes = free,
-            heavyWidgetIds = heavyIds
+            heavyWidgetIds = heavyIds,
+            limitBytes = memoryLimitBytes(context),
+            widgetMemory = costs.associate { it.first to it.second.first }
         )
     }
 }

@@ -5,7 +5,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,7 +17,6 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -40,10 +38,11 @@ private val AmberDark = Color(0xFF5C3F00) to Color(0xFFFFDEA6)
 /**
  * The main screen's summary: number of widgets, storage, and estimated home screen memory.
  * Its color shows how hard the widgets push this phone (blue, amber, red), and when it's not
- * blue it explains the biggest problem and the fix that helps most.
+ * blue it explains the biggest problem. Tapping it opens [HealthSheet]: what each number means,
+ * and (when not blue) what you can do about it.
  */
 @Composable
-fun HealthHeader(widgetCount: Int, storageBytes: Long, health: Health?, onOpenSettings: () -> Unit) {
+fun HealthHeader(widgetCount: Int, storageBytes: Long, health: Health?, onClick: () -> Unit) {
     val context = LocalContext.current
     val level = health?.level ?: HealthLevel.GOOD
     val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
@@ -57,6 +56,8 @@ fun HealthHeader(widgetCount: Int, storageBytes: Long, health: Health?, onOpenSe
     val contentColor by animateColorAsState(content, label = "health text color")
 
     Surface(
+        onClick = onClick,
+        enabled = health != null,
         shape = RoundedCornerShape(28.dp),
         color = containerColor,
         contentColor = contentColor,
@@ -78,8 +79,15 @@ fun HealthHeader(widgetCount: Int, storageBytes: Long, health: Health?, onOpenSe
                 )
             }
             AnimatedVisibility(visible = health != null && level != HealthLevel.GOOD) {
-                if (health != null) HealthMessage(health, onOpenSettings)
+                if (health != null) HealthMessage(health)
             }
+            // Says the header can be tapped, and what for.
+            Text(
+                stringResource(if (level == HealthLevel.GOOD) R.string.health_tap_details else R.string.health_tap_actions),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = LocalContentColor.current.copy(alpha = 0.8f)
+            )
         }
     }
 }
@@ -94,16 +102,14 @@ private fun Stat(value: String, label: String, modifier: Modifier = Modifier) {
 
 /** What's wrong and what helps, e.g. "...keep about 180 MB... An FPS cap of 15 would bring that down to about 90 MB." */
 @Composable
-private fun HealthMessage(health: Health, onOpenSettings: () -> Unit) {
+private fun HealthMessage(health: Health) {
     val context = LocalContext.current
     val lowerCap = health.lowerCap
-    var suggestsSettings = false
     val detail = when (health.reason) {
         HealthReason.MEMORY -> {
             val problem = stringResource(R.string.health_memory, Formatter.formatShortFileSize(context, health.memoryBytes))
             // Suggest a lower FPS cap only if it would really help (at least 10% less memory).
             val tip = if (lowerCap != null && health.memoryAtLowerCap < health.memoryBytes * 0.9) {
-                suggestsSettings = true
                 stringResource(R.string.health_tip_cap_memory, lowerCap, Formatter.formatShortFileSize(context, health.memoryAtLowerCap))
             } else {
                 stringResource(R.string.health_tip_heavy_widget)
@@ -113,7 +119,6 @@ private fun HealthMessage(health: Health, onOpenSettings: () -> Unit) {
         HealthReason.ANIMATION -> {
             val problem = pluralStringResource(R.plurals.health_animation, health.flipsPerSecond, health.flipsPerSecond)
             val tip = if (lowerCap != null) {
-                suggestsSettings = true
                 stringResource(R.string.health_tip_cap_smooth, lowerCap)
             } else {
                 stringResource(R.string.health_tip_fewer)
@@ -134,13 +139,6 @@ private fun HealthMessage(health: Health, onOpenSettings: () -> Unit) {
                 fontWeight = FontWeight.SemiBold
             )
             Text(detail, style = MaterialTheme.typography.bodySmall)
-            if (suggestsSettings) {
-                TextButton(
-                    onClick = onOpenSettings,
-                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
-                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = LocalContentColor.current)
-                ) { Text(stringResource(R.string.health_open_settings), fontWeight = FontWeight.SemiBold) }
-            }
         }
     }
 }

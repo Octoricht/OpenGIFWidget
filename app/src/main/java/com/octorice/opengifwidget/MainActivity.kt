@@ -14,6 +14,7 @@ import com.octorice.opengifwidget.config.GifConfigActivity
 import com.octorice.opengifwidget.home.HomeScreen
 import com.octorice.opengifwidget.settings.SettingsActivity
 import com.octorice.opengifwidget.ui.theme.OpenGIFWidgetTheme
+import com.octorice.opengifwidget.widget.GifWidgetProvider
 import com.octorice.opengifwidget.widget.WidgetFrames
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -44,7 +45,15 @@ class MainActivity : ComponentActivity() {
         // Widgets made by older versions (or whose size changed while the app was closed) get
         // frames fitted to their current size, then the list refreshes with the new numbers.
         lifecycleScope.launch {
-            val changed = withContext(Dispatchers.IO) { WidgetFrames.refreshAll(applicationContext) }
+            val changed = withContext(Dispatchers.IO) {
+                val remade = WidgetFrames.refreshAll(applicationContext)
+                // Redraw every widget too. After an app update the launcher shows the empty starting
+                // layout until the app redraws it, and some phones (OxygenOS) never wake the app up
+                // for that in the background, so RestoreWidgetsReceiver doesn't run. Opening the
+                // app always brings the pictures back.
+                GifWidgetProvider.updateAll(applicationContext)
+                remade
+            }
             if (changed > 0) refreshKey++
         }
     }

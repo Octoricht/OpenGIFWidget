@@ -45,6 +45,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.provider.Settings
+import androidx.compose.runtime.mutableIntStateOf
+import com.octorice.opengifwidget.widget.GifWidgetProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -97,9 +102,10 @@ fun HomeScreen(
     var health by remember { mutableStateOf<Health?>(null) }
     var showHowToAdd by remember { mutableStateOf(false) }
     var toRemove by remember { mutableStateOf<WidgetSummary?>(null) } // long-pressed card
+    var showHealth by remember { mutableStateOf(false) } // the panel behind the header
 
     // Read again whenever the screen comes back (e.g. after changing it in Settings).
-    val fpsCap = remember(refreshKey) { AppSettings.getFpsCap(context) }
+    var fpsCap by remember(refreshKey) { mutableIntStateOf(AppSettings.getFpsCap(context)) }
 
     // Loads the widgets and works out how hard they push this phone.
     suspend fun reload() {
@@ -173,10 +179,43 @@ fun HomeScreen(
                 }
                 ScreenState.Empty -> EmptyState(onAddWidget)
                 ScreenState.List -> WidgetGrid(
-                    widgets.orEmpty(), health, fpsCap, onOpenWidget, onOpenSettings, onLongPress = { toRemove = it }
+                    widgets.orEmpty(), health, fpsCap, onOpenWidget, onOpenHealth = { showHealth = true },
+                    onLongPress = { toRemove = it }
                 )
             }
         }
+    }
+
+    val current = health
+    if (showHealth && current != null) {
+        HealthSheet(
+            health = current,
+            widgets = widgets.orEmpty(),
+            fpsCap = fpsCap,
+            onDismiss = { showHealth = false },
+            // Same as choosing it in Settings: saved, every widget redrawn, numbers updated.
+            onLowerCap = { cap ->
+                scope.launch {
+                    withContext(Dispatchers.IO) {
+                        AppSettings.setFpsCap(context, cap)
+                        GifWidgetProvider.updateAll(context)
+                    }
+                    fpsCap = AppSettings.getFpsCap(context)
+                    reload()
+                }
+            },
+            onOpenWidget = { id ->
+                showHealth = false
+                onOpenWidget(id)
+            },
+            onOpenStorageSettings = {
+                try {
+                    context.startActivity(Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS))
+                } catch (_: ActivityNotFoundException) {
+                    context.startActivity(Intent(Settings.ACTION_SETTINGS))
+                }
+            }
+        )
     }
 
     toRemove?.let { widget ->
@@ -221,7 +260,7 @@ private fun WidgetGrid(
     health: Health?,
     fpsCap: Int,
     onOpenWidget: (Int) -> Unit,
-    onOpenSettings: () -> Unit,
+    onOpenHealth: () -> Unit,
     onLongPress: (WidgetSummary) -> Unit
 ) {
     val context = LocalContext.current
@@ -242,7 +281,7 @@ private fun WidgetGrid(
                 widgetCount = widgets.size,
                 storageBytes = widgets.sumOf { it.storageBytes },
                 health = health,
-                onOpenSettings = onOpenSettings
+                onClick = onOpenHealth
             )
         }
         items(widgets, key = { it.appWidgetId }) { widget ->
