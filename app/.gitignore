@@ -1,1 +1,3 @@
 /build
+# Signed release builds (APK + R8 mapping): never committed.
+/release
