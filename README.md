@@ -15,8 +15,8 @@ Free, open source, fully offline. No ads, no tracking, no internet permission.
 - **Any widget size:** resize the widget freely, and the animation is redrawn sharp for its new size.
 - **Fit or Fill:** show the whole picture, or cover the whole widget. With Fill, tap **Reposition** to choose what stays in view.
 - **Speed control:** from 0.25× to 3× per widget.
-- **Backgrounds:** pick a color (or any color with the color picker) and an opacity, which looks great behind transparent GIFs.
-- **Names:** give each widget its own name in the app.
+- **Backgrounds:** pick a color (or any color with the color picker) and an opacity, or you can leave the background completely transparent!
+- **Names:** give each widget its own name inside the app. (Widgets on your home screen will have no name)
 - **Gentle on your phone:**
   - An FPS cap (10 / 15 / 24 / 30) that adapts to your device.
   - A header that turns amber or red when your widgets get heavy, with one-tap suggestions to fix it.
@@ -56,9 +56,11 @@ To remove a widget, long-press it on your home screen and choose **Remove**.
 
 ## Tips
 
+- If you use GIFs with transparent background, they can sit in your home screen like assets! (Just like the Steamboat Willie shown)
 - **A widget stopped animating?** Some phones stop apps in the background to save battery. See **Settings → Reliability** in the app for your phone brand's setting.
 - **Home screen feels slow?** Tap the header on the main screen. It shows how much RAM your widgets use and what you can do about it.
 - **Lower FPS = less battery and RAM.** Most GIFs look great at 15–24 fps.
+  
 
 ## How it works (for the curious)
 
@@ -77,10 +79,25 @@ OpenGIFWidget has **no internet permission**, so it physically can't send anythi
 
 ## Support
 
-If you enjoy the app, you can support it on [Ko-fi](https://ko-fi.com/octorice). Thank you!
+If you enjoy the app, you can support it on [Ko-fi](https://ko-fi.com/octorice). Thank you very much!
 
 ## License
 
 OpenGIFWidget is free software, released under the [GNU General Public License v3.0](LICENSE). You can use, study, share and change it; if you share a modified version, it must stay open source under the same license.
 
-*Showcase GIFs use public-domain cartoons.*
+## Media Attributions
+
+* **Koko the Clown (Ghost Slide)**
+  * **Film:** *Snow-White* (1933)
+  * **Studio:** Fleischer Studios
+  * **Status:** Public Domain (US)
+
+* **Walrus**
+  * **Film:** *Snow-White* (1933)
+  * **Studio:** Fleischer Studios
+  * **Status:** Public Domain (US)
+
+* **Steamboat Willie (Wheel & Whistle Loops)**
+  * **Film:** *Steamboat Willie* (1928)
+  * **Studio:** Walt Disney Studio
+  * **Status:** Public Domain (US)
