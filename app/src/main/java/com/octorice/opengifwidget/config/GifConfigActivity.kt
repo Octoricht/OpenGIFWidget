@@ -212,7 +212,12 @@ class GifConfigActivity : ComponentActivity() {
                     videoThumbnail = ::videoThumbnail,
                     prepareVideo = ::prepareVideo,
                     save = ::save,
-                    onClose = ::finish,
+                    onClose = {
+                        // Delete an unsaved pick right away, so the app's list never counts it
+                        // (onDestroy also does this, but only after the list has already reloaded).
+                        discardUnsavedFrames()
+                        finish()
+                    },
                     onSaved = ::finishWithSuccess
                 )
             }
