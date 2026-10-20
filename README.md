@@ -110,7 +110,7 @@ OpenGIFWidget is free software, released under the [GNU General Public License v
   * **Status:** Public Domain (US)
 
 * **Walrus**
-  * **Film:** *Snow-White* (1933)
+  * **Film:** *Minnie the Moocher* (1932)
   * **Studio:** Fleischer Studios
   * **Status:** Public Domain (US)
 
