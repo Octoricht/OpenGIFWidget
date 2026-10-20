@@ -64,7 +64,8 @@ To remove a widget, long-press it on your home screen and choose **Remove**.
 ## Found a bug? Have an idea?
 
 Please note that I may not always be available to fix bugs right away, as this is just a passion project I work on in my free time <3
-Please [open an issue](../../issues)! Every report helps, especially from phones I can't test on myself.
+
+If you find anything; please [open an issue](../../issues)! Every report helps, especially from phones I can't test on myself.
 
 For bugs, these details help me fix it much faster:
 
