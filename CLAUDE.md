@@ -1,7 +1,8 @@
 # OpenGIFWidget
 
 Android app: home screen widgets that play pictures, GIFs and videos, in all widget sizes.
-Open source, no ads, being prepared for public release.
+Open source (GPL-3.0, see LICENSE; the only extra library, android-gif-drawable, is MIT and compatible), no ads,
+being prepared for a GitHub release.
 The name is always written **OpenGIFWidget** (exact capitalization). Package id: `com.octorice.opengifwidget`.
 
 ## Tech stack
