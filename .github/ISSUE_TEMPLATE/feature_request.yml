@@ -1,0 +1,24 @@
+name: Idea or feature request
+description: Suggest something new or an improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Got an idea? Great! Please check the [existing issues](https://github.com/Octoricht/WuxiaGIFWidget/issues?q=is%3Aissue) first, in case someone already suggested it.
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: What would you like OpenGIFWidget to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why would it be useful?
+      description: What problem does it solve, or what would it let you do?
+    validations:
+      required: false

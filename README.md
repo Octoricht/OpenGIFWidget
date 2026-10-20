@@ -61,6 +61,21 @@ To remove a widget, long-press it on your home screen and choose **Remove**.
 - **Home screen feels slow?** Tap the header on the main screen. It shows how much RAM your widgets use and what you can do about it.
 - **Lower FPS = less battery and RAM.** Most GIFs look great at 15–24 fps.
   
+## Found a bug? Have an idea?
+
+Please [open an issue](../../issues)! Every report helps, especially from phones I can't test on myself.
+
+For bugs, these details help me fix it much faster:
+
+- **Phone model** and **Android version** (e.g. Pixel 8, Android 15)
+- **Launcher** (home screen app), if you use a different one than your phone came with
+- **What happened**, and what you expected to happen
+- **Steps to reproduce it**, if you can
+- **The file**, if it only happens with one GIF or video (and you're okay sharing it)
+- **A screenshot or screen recording**, if it's something visual
+
+Before opening a new issue, take a quick look at the [existing ones](../../issues?q=is%3Aissue). Someone may have reported it already.
+
 
 ## How it works (for the curious)
 

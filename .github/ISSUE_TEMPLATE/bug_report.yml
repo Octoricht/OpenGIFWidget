@@ -1,0 +1,91 @@
+name: Bug report
+description: Something doesn't work as it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this! The more details you give, the faster it can be fixed.
+        Please check the [existing issues](https://github.com/Octoricht/WuxiaGIFWidget/issues?q=is%3Aissue) first, in case it was already reported.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What went wrong, and what did you expect to happen instead?
+      placeholder: "Example: the widget shows a blank square after I restart my phone. I expected it to keep playing the GIF."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can the problem be made to happen again?
+      placeholder: |
+        1. Add a widget
+        2. Pick a GIF and choose Fill
+        3. Restart the phone
+        4. ...
+    validations:
+      required: false
+
+  - type: input
+    id: phone
+    attributes:
+      label: Phone model
+      placeholder: "Example: Pixel 8, Samsung Galaxy S24, OnePlus 15R"
+    validations:
+      required: true
+
+  - type: input
+    id: android
+    attributes:
+      label: Android version
+      description: Found in your phone's Settings → About phone.
+      placeholder: "Example: Android 15"
+    validations:
+      required: true
+
+  - type: input
+    id: launcher
+    attributes:
+      label: Launcher (home screen app)
+      description: The one your phone came with, or another one (Nova, Lawnchair, ...). Widgets can behave differently per launcher.
+      placeholder: "Example: the phone's default launcher"
+    validations:
+      required: false
+
+  - type: input
+    id: app-version
+    attributes:
+      label: OpenGIFWidget version
+      description: Shown at the bottom of the app's Settings screen.
+      placeholder: "Example: 1.0"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does it happen?
+      multiple: true
+      options:
+        - The widget on the home screen
+        - Picking a GIF, video or picture
+        - Video trim
+        - The editor (Fit/Fill, Reposition, speed, background)
+        - The app's main screen
+        - Settings
+        - Something else
+    validations:
+      required: false
+
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Screenshots, screen recordings or files
+      description: |
+        Drag files here. If it only happens with one GIF or video, attaching it helps a lot (only if you're okay sharing it).
+    validations:
+      required: false
