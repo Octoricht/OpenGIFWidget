@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Got an idea? Great! Please check the [existing issues](https://github.com/Octoricht/WuxiaGIFWidget/issues?q=is%3Aissue) first, in case someone already suggested it.
+        Got an idea? Great! Please check the [existing issues](https://github.com/Octoricht/OpenGIFWidget/issues?q=is%3Aissue) first, in case someone already suggested it.
 
   - type: textarea
     id: idea

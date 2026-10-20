@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Thanks for taking the time to report this! The more details you give, the faster it can be fixed.
-        Please check the [existing issues](https://github.com/Octoricht/WuxiaGIFWidget/issues?q=is%3Aissue) first, in case it was already reported.
+        Please check the [existing issues](https://github.com/Octoricht/OpenGIFWidget/issues?q=is%3Aissue) first, in case it was already reported.
 
   - type: textarea
     id: what-happened
