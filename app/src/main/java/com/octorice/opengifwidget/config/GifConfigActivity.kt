@@ -124,6 +124,9 @@ import kotlin.math.exp
 import kotlin.math.ln
 import com.octorice.opengifwidget.ui.ShapedBox
 import com.octorice.opengifwidget.shape.WidgetShape
+import com.octorice.opengifwidget.shape.ShapeStyle
+import com.octorice.opengifwidget.shape.PixelSize
+import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.asComposePath
 import com.octorice.opengifwidget.ui.friendlyMessage
@@ -219,6 +222,7 @@ class GifConfigActivity : ComponentActivity() {
                 shape = WidgetStore.getShape(this, appWidgetId),
                 zoom = WidgetStore.getZoom(this, appWidgetId),
                 spin = WidgetStore.getSpin(this, appWidgetId),
+                style = WidgetStore.getShapeStyle(this, appWidgetId),
                 background = WidgetStore.getBackground(this, appWidgetId),
                 speed = WidgetStore.getSpeed(this, appWidgetId)
             )
@@ -233,7 +237,7 @@ class GifConfigActivity : ComponentActivity() {
                     widgetAspectRatio = WidgetSizes.aspectRatio(this, appWidgetId),
                     fpsCap = AppSettings.getFpsCap(this),
                     outputSidePx = ::outputSidePx,
-                    shapeForWidget = { shape -> WidgetSizes.shapeFor(this, appWidgetId, shape) },
+                    shapeForWidget = { shape, style -> WidgetSizes.shapeFor(this, appWidgetId, shape, style) },
                     framesDir = { version -> GifStorage.framesDir(this, appWidgetId, version) },
                     prepare = ::prepare,
                     openVideo = ::openVideo,
@@ -381,7 +385,8 @@ class GifConfigActivity : ComponentActivity() {
             // Sized and shaped for the widget as it is on the home screen right now.
             val made = WidgetFrames.make(
                 context, appWidgetId, master, settings.scaleMode,
-                settings.cropCenter.x to settings.cropCenter.y, settings.roundCorners, settings.shape, settings.zoom, settings.spin, onProgress
+                settings.cropCenter.x to settings.cropCenter.y, settings.roundCorners, settings.shape, settings.zoom, settings.spin, onProgress,
+                style = settings.style
             )
             try {
                 checkMemoryLimit(context, made, settings.speed)
@@ -402,6 +407,7 @@ class GifConfigActivity : ComponentActivity() {
         WidgetStore.saveShape(context, appWidgetId, settings.shape)
         WidgetStore.saveZoom(context, appWidgetId, settings.zoom)
         WidgetStore.saveSpin(context, appWidgetId, settings.spin)
+        WidgetStore.saveShapeStyle(context, appWidgetId, settings.style)
         WidgetStore.saveBackground(context, appWidgetId, settings.background)
         WidgetStore.saveSpeed(context, appWidgetId, settings.speed)
         // An empty name falls back to the file's name.
@@ -472,6 +478,7 @@ private data class EditorSettings(
     val shape: WidgetShape?,   // cookie-cutter shape, null = none
     val zoom: Float?,          // custom zoom (1 = Fill), null = the Fit / Fill preset in scaleMode
     val spin: Float?,          // "Make the CD spin": seconds per turn, null = off (only for shapes that spin)
+    val style: ShapeStyle,     // shape tools: Pixelify size, Reverse (only apply with a shape)
     val background: WidgetBackground,
     val speed: Float
 )
@@ -502,7 +509,7 @@ private fun EditorScreen(
     widgetAspectRatio: Float,
     fpsCap: Int,
     outputSidePx: (shape: WidgetShape?, frameCount: Int, boxAspect: Float) -> Int,
-    shapeForWidget: (WidgetShape?) -> WidgetShape?,
+    shapeForWidget: (WidgetShape?, ShapeStyle) -> WidgetShape?,
     framesDir: (version: Long) -> File,
     prepare: suspend (Uri, (Int, Int) -> Unit) -> StoredGif,
     openVideo: suspend (Uri) -> OpenedVideo,
@@ -533,6 +540,19 @@ private fun EditorScreen(
     // Your own zoom (1 = Fill), or null while a Fit / Fill preset is used. Cancel goes back to these.
     var customZoom by remember { mutableStateOf(saved.settings.zoom) }
     var spin by remember { mutableStateOf(saved.settings.spin) }
+    // Shape tools. They keep their state when you switch shapes (and the edge size is remembered).
+    // One edge style at a time: Pixel edges or Halftone edges.
+    var pixelOn by remember { mutableStateOf(saved.settings.style.pixel != null) }
+    var halftoneOn by remember { mutableStateOf(saved.settings.style.halftone != null) }
+    var pixelSize by remember {
+        mutableStateOf(saved.settings.style.pixel ?: saved.settings.style.halftone ?: PixelSize.MEDIUM)
+    }
+    var reverse by remember { mutableStateOf(saved.settings.style.reverse) }
+    fun currentStyle() = ShapeStyle(
+        pixel = if (pixelOn) pixelSize else null,
+        reverse = reverse,
+        halftone = if (halftoneOn) pixelSize else null
+    )
     var zoomBeforeReposition by remember { mutableStateOf(customZoom) }
     var modeBeforeReposition by remember { mutableStateOf(scaleMode) }
     var background by remember { mutableStateOf(saved.settings.background) }
@@ -559,7 +579,7 @@ private fun EditorScreen(
     // points on the same scale (Fill = 1), so the preview always uses the zoom math (Zoom.box).
     // The picked shape as drawn at this widget's size (Dots: as many dots as fit). Previews,
     // Reposition and the zoom limits use this one; the picked shape is what gets saved.
-    val drawnShape = shapeForWidget(shape)
+    val drawnShape = shapeForWidget(shape, currentStyle())
     val boxAspect = drawnShape?.aspect ?: widgetAspectRatio
     val fitZoom = master?.let { Zoom.fitZoom(it.width.toFloat(), it.height.toFloat(), boxAspect) } ?: 1f
     val minZoom = fitZoom * Zoom.MIN_OF_FIT
@@ -584,7 +604,9 @@ private fun EditorScreen(
     fun remakeFrames() = picked != null ||
         saved.gif?.frames == null ||
         customZoom != saved.settings.zoom ||
-        WidgetFrames.spinFor(shape, spin) != WidgetFrames.spinFor(saved.settings.shape, saved.settings.spin) ||
+        (shape != null && currentStyle() != saved.settings.style) ||
+        WidgetFrames.spinFor(shapeForWidget(shape, currentStyle()), spin) !=
+            WidgetFrames.spinFor(shapeForWidget(saved.settings.shape, saved.settings.style), saved.settings.spin) ||
         (customZoom == null && scaleMode != saved.settings.scaleMode) ||
         ((scaleMode == ScaleMode.FILL || customZoom != null) && cropCenter != saved.settings.cropCenter) ||
         shape != saved.settings.shape ||
@@ -714,7 +736,7 @@ private fun EditorScreen(
             busy = Busy.Saving(0, 0)
             error = null
             try {
-                val settings = EditorSettings(name, scaleMode, cropCenter, roundCorners, shape, customZoom, spin, background, speed)
+                val settings = EditorSettings(name, scaleMode, cropCenter, roundCorners, shape, customZoom, spin, currentStyle(), background, speed)
                 save(gif, settings, remakeFrames(), widgetAspectRatio) { done, total ->
                     busy = Busy.Saving(done, total)
                 }
@@ -835,7 +857,7 @@ private fun EditorScreen(
                         squareCorners = shape == null && WidgetSizes.needsRoundedFrames &&
                             (scaleMode == ScaleMode.FILL || customZoom != null) && !roundCorners,
                         // The CD spins in the preview too, as fast as on the widget (speed included).
-                        spinMs = WidgetFrames.spinFor(shape, spin)?.let { (it * 1000 / speed).roundToInt() }
+                        spinMs = WidgetFrames.spinFor(drawnShape, spin)?.let { (it * 1000 / speed).roundToInt() }
                     )
                 }
 
@@ -974,8 +996,23 @@ private fun EditorScreen(
                         onChange = pickShape
                     )
 
-                    // Only for the CD: one small switch, and the speed only once it's on.
-                    AnimatedVisibility(visible = shape?.spins == true) {
+                    // Shape tools, only with a shape: Pixelify (+ its size) and Reverse.
+                    AnimatedVisibility(visible = shape != null) {
+                        ShapeTools(
+                            pixelOn = pixelOn,
+                            halftoneOn = halftoneOn,
+                            size = pixelSize,
+                            reverse = reverse,
+                            enabled = busy == null,
+                            onPixelOn = { on -> pixelOn = on; if (on) halftoneOn = false },
+                            onHalftoneOn = { on -> halftoneOn = on; if (on) pixelOn = false },
+                            onSize = { pixelSize = it },
+                            onReverse = { reverse = it }
+                        )
+                    }
+
+                    // Only for the CD (and not reversed): one small switch, and the speed only once it's on.
+                    AnimatedVisibility(visible = drawnShape?.spins == true) {
                         SpinControls(spin, enabled = busy == null, onChange = { spin = it })
                     }
 
@@ -1531,6 +1568,60 @@ private fun SpinControls(spin: Float?, enabled: Boolean, onChange: (Float?) -> U
                     steps = (choices.size - 2).coerceAtLeast(0),
                     enabled = enabled
                 )
+            }
+        }
+    }
+}
+
+/**
+ * The shape tools, kept small: three chips, Pixel edges, Halftone edges (one edge style at a time)
+ * and Reverse; they wrap onto a second line on narrow screens (room for "Brush" later).
+ * With an edge style on, its three sizes show underneath.
+ */
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun ShapeTools(
+    pixelOn: Boolean,
+    halftoneOn: Boolean,
+    size: PixelSize,
+    reverse: Boolean,
+    enabled: Boolean,
+    onPixelOn: (Boolean) -> Unit,
+    onHalftoneOn: (Boolean) -> Unit,
+    onSize: (PixelSize) -> Unit,
+    onReverse: (Boolean) -> Unit
+) {
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = pixelOn,
+                onClick = { onPixelOn(!pixelOn) },
+                label = { Text(stringResource(R.string.editor_pixelify)) },
+                enabled = enabled
+            )
+            FilterChip(
+                selected = halftoneOn,
+                onClick = { onHalftoneOn(!halftoneOn) },
+                label = { Text(stringResource(R.string.editor_halftone)) },
+                enabled = enabled
+            )
+            FilterChip(
+                selected = reverse,
+                onClick = { onReverse(!reverse) },
+                label = { Text(stringResource(R.string.editor_reverse)) },
+                enabled = enabled
+            )
+        }
+        AnimatedVisibility(visible = pixelOn || halftoneOn) {
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                PixelSize.entries.forEachIndexed { index, option ->
+                    SegmentedButton(
+                        selected = size == option,
+                        onClick = { onSize(option) },
+                        enabled = enabled,
+                        shape = SegmentedButtonDefaults.itemShape(index, PixelSize.entries.size)
+                    ) { Text(stringResource(option.nameRes)) }
+                }
             }
         }
     }

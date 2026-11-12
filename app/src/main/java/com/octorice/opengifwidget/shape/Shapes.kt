@@ -679,6 +679,8 @@ object Shapes {
      */
     fun byId(context: android.content.Context, id: String?): WidgetShape? {
         if (id == null) return null
+        // With shape tools ("heart#p20#r1.50"): the shape before "#", then the tools.
+        if ('#' in id) return byId(context, id.substringBefore('#'))?.let { StyledShape.fromId(it, id) }
         if (id.startsWith(CustomShapes.PREFIX)) return CustomShapes.get(context, id)
         val shape = all.firstOrNull { it.id == id.substringBefore('@') } ?: return null
         if ('@' !in id) return shape

@@ -149,6 +149,29 @@ object WidgetStore {
     fun getShape(context: Context, appWidgetId: Int): WidgetShape? =
         Shapes.byId(context, prefs(context).getString("shape_$appWidgetId", null))
 
+    /**
+     * The shape tools (Pixelify size, Reverse). Kept even with no shape, so they're still set when
+     * a shape is picked again; they only apply to a shape.
+     */
+    fun getShapeStyle(context: Context, appWidgetId: Int): com.octorice.opengifwidget.shape.ShapeStyle {
+        val prefs = prefs(context)
+        val pixel = prefs.getString("shape_pixel_$appWidgetId", null)
+            ?.let { name -> com.octorice.opengifwidget.shape.PixelSize.entries.firstOrNull { it.name == name } }
+        val halftone = prefs.getString("shape_halftone_$appWidgetId", null)
+            ?.let { name -> com.octorice.opengifwidget.shape.PixelSize.entries.firstOrNull { it.name == name } }
+        return com.octorice.opengifwidget.shape.ShapeStyle(
+            pixel, prefs.getBoolean("shape_reverse_$appWidgetId", false), halftone
+        )
+    }
+
+    fun saveShapeStyle(context: Context, appWidgetId: Int, style: com.octorice.opengifwidget.shape.ShapeStyle) {
+        prefs(context).edit {
+            if (style.pixel == null) remove("shape_pixel_$appWidgetId") else putString("shape_pixel_$appWidgetId", style.pixel.name)
+            if (!style.reverse) remove("shape_reverse_$appWidgetId") else putBoolean("shape_reverse_$appWidgetId", true)
+            if (style.halftone == null) remove("shape_halftone_$appWidgetId") else putString("shape_halftone_$appWidgetId", style.halftone.name)
+        }
+    }
+
     /** The saved shape's id as stored ("heart", "custom:1712345", ...), even if that shape is gone. */
     fun getShapeId(context: Context, appWidgetId: Int): String? =
         prefs(context).getString("shape_$appWidgetId", null)

@@ -102,6 +102,21 @@ RemoteViews can't play GIFs directly, so:
     the preview; frames are made on Save. Going from None to a shape opens Reposition once per editor visit (Fit or Fill).
   - RAM: `UsageHealth.widgetCost` counts the mask as one extra frame when `frames.masked`; the per-widget pixel budget in
     `deriveWidgetFrames` counts it too.
+- Shape tools (v1.1, `shape/ShapeStyle.kt`): Pixel edges (was "Pixelify"; `PixelSize` Small 32 / Medium 20 / Chonky 12
+  cells across the box's long side), Halftone edges (same sizes; one edge style at a time) and Reverse. `StyledShape.of(sizedShape, style, widgetAspect)` wraps any shape (built-in, pattern,
+  custom) and is a shape itself, so frames, background layer, previews, zoom, resize re-cuts and RAM work unchanged.
+  Pixelify: square cells aligned to the shape box, each = the smooth mask's value at the cell CENTER, drawn without
+  anti-aliasing (crisp steps; grays like the CD's become stepped grays). Halftone: the shape drawn 2 cells smaller on each side (so the outward fade fits in the box
+  instead of being cut off), shrunk to a half-cell map,
+  box-blurred twice (~1 cell) so the edge fades over a few dots, then anti-aliased white dots on a slanted grid (rows half a
+  cell apart, odd rows shifted half a cell), radius = 0.56 cell x sqrt(value) (full = merged solid, faint = specks). Reverse: mask flipped with DST_OUT (70% -> 30%);
+  the box becomes the whole widget (aspect in 0.05 steps), the hole = the shape box, centered. Order: Pixelify, then Reverse.
+  Styled shapes: no outline (Reposition dims with the mask), no CD shine, no spin when reversed. Ids: `heart#p20#r1.50`, `heart#h20`
+  (in `fit_shape_<id>`, so tool changes and reversed resizes re-cut); `Shapes.byId` reads them (`StyledShape.fromId`).
+  Stored: `shape_pixel_<id>` / `shape_halftone_<id>` (PixelSize name) and `shape_reverse_<id>`; kept even with no shape (toggles keep their
+  state), only applied with a shape (`WidgetSizes.shapeFor(context, id, shape, style)`). Editor: `ShapeTools` row (three
+  FilterChips in a FlowRow, room for "Brush" later) shown only with a shape; the shared size choice appears once an
+  edge style is on.
 - Custom shapes (v1.1, `shape/CustomShapes.kt`, `ui/ShapeLibraryUi.kt`): any picture becomes a cutter. A shape either draws
   its outline (`WidgetShape.path`, `hasOutline`) or supplies a mask picture (`renderMask`); `ShapeMask.render` calls
   `renderMask`, so frames, background layer, previews, RAM count, zoom and resize re-cuts work unchanged.

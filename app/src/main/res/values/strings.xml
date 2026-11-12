@@ -191,6 +191,12 @@
     <string name="shape_leaf">Leaf</string>
     <string name="shape_cd">CD</string>
     <string name="editor_spin">Make the CD spin</string>
+    <string name="editor_pixelify">Pixel edges</string>
+    <string name="editor_halftone">Halftone edges</string>
+    <string name="editor_reverse">Reverse</string>
+    <string name="pixel_small">Small</string>
+    <string name="pixel_medium">Medium</string>
+    <string name="pixel_chonky">Chonky</string>
     <string name="editor_spin_speed">Spin speed: one turn every %1$s s</string>
     <string name="shape_custom">Your shape</string>
     <string name="shapes_library_title">Your shapes</string>

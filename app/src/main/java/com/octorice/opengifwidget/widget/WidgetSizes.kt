@@ -74,10 +74,18 @@ object WidgetSizes {
      * [shape] as drawn on this widget at its current size (see WidgetShape.forSize), or the shape
      * itself while the size isn't known yet. Null stays null (no shape).
      */
-    fun shapeFor(context: Context, appWidgetId: Int, shape: WidgetShape?): WidgetShape? {
+    fun shapeFor(
+        context: Context,
+        appWidgetId: Int,
+        shape: WidgetShape?,
+        style: com.octorice.opengifwidget.shape.ShapeStyle = com.octorice.opengifwidget.shape.ShapeStyle.PLAIN
+    ): WidgetShape? {
         if (shape == null) return null
-        val (width, height) = currentSizeDp(context, appWidgetId) ?: return shape.base
-        return shape.base.forSize(width.toFloat(), height.toFloat())
+        val sized = currentSizeDp(context, appWidgetId)?.let { (width, height) ->
+            shape.base.forSize(width.toFloat(), height.toFloat())
+        } ?: shape.base
+        // Then the shape tools (Pixelify, Reverse); Reverse covers the whole widget.
+        return com.octorice.opengifwidget.shape.StyledShape.of(sized, style, aspectRatio(context, appWidgetId))
     }
 
     /**

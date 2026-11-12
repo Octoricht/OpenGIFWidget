@@ -14,6 +14,7 @@ import com.octorice.opengifwidget.gif.FrameSet
 import com.octorice.opengifwidget.gif.Spin
 import com.octorice.opengifwidget.data.AppSettings
 import com.octorice.opengifwidget.shape.WidgetShape
+import com.octorice.opengifwidget.shape.ShapeStyle
 import kotlin.math.abs
 
 /**
@@ -37,10 +38,11 @@ object WidgetFrames {
         pickedShape: WidgetShape?,
         zoom: Float?, // custom zoom (1 = Fill), or null for the Fit / Fill preset in [scaleMode]
         spinSeconds: Float?, // "Make the CD spin": seconds per turn, or null (only used if the shape spins)
-        onProgress: (Int, Int) -> Unit = { _, _ -> }
+        onProgress: (Int, Int) -> Unit = { _, _ -> },
+        style: ShapeStyle = ShapeStyle.PLAIN // Pixelify / Reverse (only with a shape)
     ): FrameSet = synchronized(lock) {
         // The shape as drawn at this widget's size (a pattern like Dots gets more dots when bigger).
-        val shape = WidgetSizes.shapeFor(context, appWidgetId, pickedShape)
+        val shape = WidgetSizes.shapeFor(context, appWidgetId, pickedShape, style)
         val aspect = WidgetSizes.aspectRatio(context, appWidgetId)
         val spinUsed = spinFor(shape, spinSeconds)
         // With a shape, frames have the shape's box shape (e.g. square), not the widget's.
@@ -98,7 +100,8 @@ object WidgetFrames {
         val old = gif.frames ?: return false
         // At the widget's current size: a resized Dots widget gets a new grid, so its id changes
         // ("dots@3x3" -> "dots@6x3") and the frames are re-cut below.
-        val cutter = WidgetSizes.shapeFor(context, appWidgetId, WidgetStore.getShape(context, appWidgetId))
+        val style = WidgetStore.getShapeStyle(context, appWidgetId)
+        val cutter = WidgetSizes.shapeFor(context, appWidgetId, WidgetStore.getShape(context, appWidgetId), style)
         val newTarget = (if (cutter != null) {
             WidgetSizes.shapeMaxSidePx(context, appWidgetId, cutter.aspect)
         } else {
@@ -123,7 +126,7 @@ object WidgetFrames {
 
         return try {
             val frames = make(
-                context, appWidgetId, master, scaleMode, WidgetStore.getCropCenter(context, appWidgetId), roundCorners, cutter, zoom, spinSeconds
+                context, appWidgetId, master, scaleMode, WidgetStore.getCropCenter(context, appWidgetId), roundCorners, cutter, zoom, spinSeconds, style = style
             )
             WidgetStore.saveGif(context, appWidgetId, gif.copy(frames = frames))
             GifWidgetProvider.updateWidget(context, AppWidgetManager.getInstance(context), appWidgetId)

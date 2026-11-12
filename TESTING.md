@@ -28,6 +28,7 @@ Real devices that can't be emulated: Samsung (One UI), Xiaomi (MIUI/HyperOS), On
 - [ ] Shapes: Circle and Heart on a GIF, a picture and a video, in Fit and Fill; Reposition opens on the first shape pick
 - [ ] Shapes in a 4x2 widget: the circle stays round, centered; resizing re-cuts it; background color/opacity follows the shape
 - [ ] CD: hole, clear hub and rim show the wallpaper; "Make the CD spin" on a still, a GIF and a video (no jump when the loop restarts), spin speed slider, switching to another shape hides the spin options
+- [ ] Shape tools: Pixel edges and Halftone edges (Small/Medium/Chonky) on Heart, Star, CD (stepped grays / halftone dots); Reverse on Circle (square + 4x2 widget), both together, a custom shape with both; zoom with Reverse; background color with Reverse; resize; tools hidden on None
 - [ ] Shape back to None: the widget looks exactly like before (full rounded background again)
 - [ ] Zoom: Reposition in Fit and Fill; pinch in/out and the slider snap (tick) on Fit and Fill; zoom out past Fit shows the background
 - [ ] Zoom: Cancel/Back restores the old zoom; Fit/Fill buttons snap (none lit for your own zoom); saved zoom survives resizing
