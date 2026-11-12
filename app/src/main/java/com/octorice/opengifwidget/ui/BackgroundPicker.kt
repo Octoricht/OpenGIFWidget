@@ -180,7 +180,7 @@ private fun SwatchCircle(
 
 /** The usual gray-and-white checkerboard that means "see-through". */
 @Composable
-private fun Checkerboard() {
+internal fun Checkerboard() {
     Canvas(Modifier.fillMaxSize()) {
         val cell = 6.dp.toPx()
         drawRect(Color(0xFFFFFFFF))

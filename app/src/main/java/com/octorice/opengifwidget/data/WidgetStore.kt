@@ -128,7 +128,11 @@ object WidgetStore {
 
     /** The widget's shape ("cookie cutter"), or null for none (the default, and every v1.0 widget). */
     fun getShape(context: Context, appWidgetId: Int): WidgetShape? =
-        Shapes.byId(prefs(context).getString("shape_$appWidgetId", null))
+        Shapes.byId(context, prefs(context).getString("shape_$appWidgetId", null))
+
+    /** The saved shape's id as stored ("heart", "custom:1712345", ...), even if that shape is gone. */
+    fun getShapeId(context: Context, appWidgetId: Int): String? =
+        prefs(context).getString("shape_$appWidgetId", null)
 
     fun saveShape(context: Context, appWidgetId: Int, shape: WidgetShape?) {
         prefs(context).edit {

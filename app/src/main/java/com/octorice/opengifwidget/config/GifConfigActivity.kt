@@ -80,6 +80,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -105,6 +106,10 @@ import com.octorice.opengifwidget.data.WidgetBackground
 import com.octorice.opengifwidget.data.friendlyErrors
 import com.octorice.opengifwidget.ui.BackgroundPicker
 import com.octorice.opengifwidget.ui.ShapePicker
+import com.octorice.opengifwidget.ui.ShapeLibraryGrid
+import com.octorice.opengifwidget.ui.AddShapeDialogs
+import com.octorice.opengifwidget.ui.rememberShapeLibrary
+import androidx.compose.material3.ModalBottomSheet
 import com.octorice.opengifwidget.gif.Zoom
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.draw.clipToBounds
@@ -511,6 +516,10 @@ private fun EditorScreen(
     var shapeRepositionShown by remember { mutableStateOf(false) }
     // Opens Reposition on the next frame, once the preview knows the new shape's box.
     var openRepositionSoon by remember { mutableStateOf(false) }
+    // The shape library sheet ("Custom") and its "Add new shape" steps.
+    var showLibrary by remember { mutableStateOf(false) }
+    var addingShape by remember { mutableStateOf(false) }
+    val library = rememberShapeLibrary()
     // Fill: the picture is locked until you tap "Reposition" (no accidental moves). Cancel goes back here.
     var repositioning by remember { mutableStateOf(false) }
     var cropBeforeReposition by remember { mutableStateOf(cropCenter) }
@@ -716,6 +725,46 @@ private fun EditorScreen(
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { onPicked(it) }
+
+    // A shape was picked (built-in, or from the library). Only the preview changes until Save.
+    val pickShape: (WidgetShape?) -> Unit = { picked ->
+        // (A custom zoom keeps its number; Fit / Fill presets follow the new shape's box.)
+        val first = shape == null && picked != null && !shapeRepositionShown
+        shape = picked
+        // Picking a shape changes what fits, so show where the shape sits right away.
+        if (first && image != null && !repositioning) {
+            shapeRepositionShown = true
+            openRepositionSoon = true
+        }
+    }
+
+    // "Custom": the shape library (your shapes + "Add new shape"), as a sheet from the bottom.
+    if (showLibrary) {
+        ModalBottomSheet(onDismissRequest = { showLibrary = false }) {
+            Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 24.dp)) {
+                SectionTitle(stringResource(R.string.shapes_library_title))
+                ShapeLibraryGrid(
+                    shapes = library.shapes,
+                    selected = shape,
+                    enabled = busy == null,
+                    onPick = { picked ->
+                        showLibrary = false
+                        pickShape(picked)
+                    },
+                    onAdd = { addingShape = true }
+                )
+            }
+        }
+    }
+    AddShapeDialogs(
+        open = addingShape,
+        onClose = { addingShape = false },
+        onAdded = { added ->
+            library.reload()
+            showLibrary = false
+            pickShape(added)
+        }
+    )
 
     trimming?.let { video ->
         TrimDialog(
@@ -924,16 +973,7 @@ private fun EditorScreen(
 
                     Spacer(Modifier.height(24.dp))
                     SectionTitle(stringResource(R.string.editor_shape))
-                    ShapePicker(shape, enabled = busy == null) { picked ->
-                        // (A custom zoom keeps its number; Fit / Fill presets follow the new shape's box.)
-                        val first = shape == null && picked != null && !shapeRepositionShown
-                        shape = picked
-                        // Picking a shape changes what fits, so show where the shape sits right away (Fill only).
-                        if (first && image != null && !repositioning) {
-                            shapeRepositionShown = true
-                            openRepositionSoon = true
-                        }
-                    }
+                    ShapePicker(shape, enabled = busy == null, onOpenLibrary = { showLibrary = true }, onChange = pickShape)
 
                     // Android 8-11 don't round widget corners, so a Fill picture's corners are square there.
                     // Newer versions never see this switch. A shape replaces it.
@@ -1190,11 +1230,25 @@ private fun ZoomView(
     val latestOnChange by rememberUpdatedState(onZoomChange)
     // The pinch's own zoom, before snapping, so snapping onto Fit / Fill doesn't hold your fingers there.
     var rawZoom by remember { mutableFloatStateOf(zoom()) }
+    // Shapes made from a picture have no outline: their mask, sized to the window, dims what's cut away.
+    var viewSize by remember { mutableStateOf(IntSize.Zero) }
+    val marginPx = with(androidx.compose.ui.platform.LocalDensity.current) { 24.dp.toPx() }
+    val windowMask = remember(shape, viewSize, aspectRatio) {
+        if (shape == null || shape.hasOutline || viewSize.width <= 0) {
+            null
+        } else {
+            val window = zoomWindow(viewSize.width.toFloat(), viewSize.height.toFloat(), aspectRatio, marginPx)
+            com.octorice.opengifwidget.shape.ShapeMask.render(
+                shape, window.width.roundToInt().coerceAtLeast(1), window.height.roundToInt().coerceAtLeast(1)
+            ).asImageBitmap()
+        }
+    }
     val bgColor = background.toComposeColor()
 
     Canvas(
         modifier
             .clipToBounds()
+            .onSizeChanged { viewSize = it }
             .pointerInput(image.width, image.height, aspectRatio, fitZoom, minZoom, maxZoom) {
                 detectTransformGestures { _, pan, gestureZoom, _ ->
                     val oldZoom = latestZoom()
@@ -1238,7 +1292,19 @@ private fun ZoomView(
             op(this, kept, PathOperation.Difference)
         }
         drawPath(outside, Color.Black.copy(alpha = 0.6f))
-        if (shape != null) {
+        if (windowMask != null) {
+            // Inside the window: dim everything, then take the dimming away where the mask keeps the picture.
+            drawContext.canvas.saveLayer(window, androidx.compose.ui.graphics.Paint())
+            drawRect(Color.Black.copy(alpha = 0.6f), window.topLeft, window.size)
+            drawImage(
+                windowMask,
+                dstOffset = IntOffset(window.left.roundToInt(), window.top.roundToInt()),
+                dstSize = IntSize(window.width.roundToInt().coerceAtLeast(1), window.height.roundToInt().coerceAtLeast(1)),
+                blendMode = androidx.compose.ui.graphics.BlendMode.DstOut
+            )
+            drawContext.canvas.restore()
+            drawRect(Color.White.copy(alpha = 0.5f), window.topLeft, window.size, style = Stroke(1.dp.toPx()))
+        } else if (shape != null) {
             drawRect(Color.White.copy(alpha = 0.5f), window.topLeft, window.size, style = Stroke(1.dp.toPx()))
             drawPath(kept, Color.White, style = Stroke(2.dp.toPx()))
         } else {

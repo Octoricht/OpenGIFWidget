@@ -45,7 +45,7 @@ object HomeData {
                 speed = WidgetStore.getSpeed(context, id),
                 background = WidgetStore.getBackground(context, id),
                 zoomed = gif?.frames?.boxed == true,
-                shape = if (gif?.frames?.masked == true) Shapes.byId(WidgetStore.getFramesShapeId(context, id)) else null,
+                shape = if (gif?.frames?.masked == true) Shapes.byId(context, WidgetStore.getFramesShapeId(context, id)) else null,
                 framesDir = gif?.frames?.let { GifStorage.framesDir(context, id, it.version) },
                 aspectRatio = WidgetSizes.aspectRatio(context, id),
                 storageBytes = GifStorage.widgetStorageBytes(context, id)

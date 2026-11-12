@@ -60,6 +60,18 @@ import com.octorice.opengifwidget.BuildConfig
 import com.octorice.opengifwidget.R
 import com.octorice.opengifwidget.data.AppSettings
 import com.octorice.opengifwidget.ui.theme.OpenGIFWidgetTheme
+import com.octorice.opengifwidget.shape.CustomShape
+import com.octorice.opengifwidget.shape.CustomShapes
+import com.octorice.opengifwidget.shape.ShapeMask
+import com.octorice.opengifwidget.ui.AddShapeDialogs
+import com.octorice.opengifwidget.ui.MaskPreview
+import com.octorice.opengifwidget.ui.ShapeLibraryGrid
+import com.octorice.opengifwidget.ui.rememberShapeLibrary
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.res.pluralStringResource
+import android.widget.Toast
 import com.octorice.opengifwidget.widget.GifWidgetProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -147,6 +159,9 @@ private fun SettingsScreen(onBack: () -> Unit) {
                 }
             }
 
+            SectionTitle(stringResource(R.string.shapes_library_title))
+            SettingsCard { YourShapes() }
+
             SectionTitle(stringResource(R.string.settings_reliability))
             SettingsCard {
                 Text(stringResource(R.string.settings_battery_title), style = MaterialTheme.typography.titleMedium)
@@ -219,6 +234,87 @@ private fun SettingsScreen(onBack: () -> Unit) {
  * Opens the phone's list of apps and their battery optimization (no permission needed).
  * Phones without that screen get the app's own info page, which has the battery options too.
  */
+/**
+ * The shape library: your shapes (tap one to see it bigger and delete it) and "Add new shape".
+ * Deleting a shape that widgets use sends them back to no shape (re-cut in the background).
+ */
+@Composable
+private fun YourShapes() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val library = rememberShapeLibrary()
+    var adding by remember { mutableStateOf(false) }
+    var viewing by remember { mutableStateOf<CustomShape?>(null) }
+    var confirming by remember { mutableStateOf<Pair<CustomShape, Int>?>(null) } // shape + widgets using it
+    var deleting by remember { mutableStateOf(false) }
+
+    Text(
+        stringResource(R.string.shapes_library_description),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    ShapeLibraryGrid(
+        shapes = library.shapes,
+        selected = null,
+        enabled = !deleting,
+        onPick = { viewing = it },
+        onAdd = { adding = true }
+    )
+
+    AddShapeDialogs(open = adding, onClose = { adding = false }, onAdded = { library.reload() })
+
+    // A shape, bigger, with Delete.
+    viewing?.let { shape ->
+        val mask = remember(shape) {
+            val side = 512
+            val w = if (shape.aspect >= 1f) side else (side * shape.aspect).toInt().coerceAtLeast(1)
+            val h = if (shape.aspect >= 1f) (side / shape.aspect).toInt().coerceAtLeast(1) else side
+            ShapeMask.render(shape, w, h)
+        }
+        AlertDialog(
+            onDismissRequest = { viewing = null },
+            text = { MaskPreview(mask, Modifier.size(220.dp)) },
+            confirmButton = { TextButton(onClick = { viewing = null }) { Text(stringResource(R.string.shapes_close)) } },
+            dismissButton = {
+                TextButton(onClick = {
+                    viewing = null
+                    scope.launch {
+                        val users = withContext(Dispatchers.IO) { CustomShapes.usedBy(context, shape).size }
+                        confirming = shape to users
+                    }
+                }) { Text(stringResource(R.string.shapes_delete), color = MaterialTheme.colorScheme.error) }
+            }
+        )
+    }
+
+    // "Delete this shape?" (and how many widgets it's on).
+    confirming?.let { (shape, users) ->
+        AlertDialog(
+            onDismissRequest = { confirming = null },
+            title = { Text(stringResource(R.string.shapes_delete_title)) },
+            text = if (users > 0) {
+                { Text(pluralStringResource(R.plurals.shapes_delete_used, users, users)) }
+            } else {
+                null
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirming = null
+                    deleting = true
+                    scope.launch {
+                        // Re-cutting the widgets takes a moment each: off the main thread.
+                        withContext(Dispatchers.IO) { CustomShapes.delete(context, shape) }
+                        deleting = false
+                        library.reload()
+                        Toast.makeText(context, R.string.shapes_deleted, Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text(stringResource(R.string.shapes_delete), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { confirming = null }) { Text(stringResource(R.string.shapes_back)) } }
+        )
+    }
+}
+
 private fun openBatterySettings(context: Context) {
     val batteryList = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
     val appInfo = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))

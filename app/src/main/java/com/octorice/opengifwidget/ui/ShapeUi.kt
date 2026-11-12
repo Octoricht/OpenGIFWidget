@@ -49,6 +49,9 @@ import com.octorice.opengifwidget.data.WidgetBackground
 import com.octorice.opengifwidget.shape.ShapeMask
 import com.octorice.opengifwidget.shape.Shapes
 import com.octorice.opengifwidget.shape.WidgetShape
+import com.octorice.opengifwidget.shape.CustomShape
+import androidx.compose.material3.Icon
+import androidx.compose.ui.res.painterResource
 
 /** The shape's mask at this size, made once (and again only if the shape or size changes). */
 @Composable
@@ -105,9 +108,12 @@ fun ShapedBox(
     }
 }
 
-/** "None" and every shape as small tiles, scrolling sideways (room for more shapes later). */
+/**
+ * "None", every built-in shape, the custom shape in use (if any), then "Custom", which opens the
+ * shape library ([onOpenLibrary]). Small tiles, scrolling sideways.
+ */
 @Composable
-fun ShapePicker(shape: WidgetShape?, enabled: Boolean, onChange: (WidgetShape?) -> Unit) {
+fun ShapePicker(shape: WidgetShape?, enabled: Boolean, onOpenLibrary: () -> Unit, onChange: (WidgetShape?) -> Unit) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             ShapeTile(stringResource(R.string.shape_none), selected = shape == null, enabled = enabled, onClick = { onChange(null) }) { color ->
@@ -123,22 +129,65 @@ fun ShapePicker(shape: WidgetShape?, enabled: Boolean, onChange: (WidgetShape?) 
         }
         items(Shapes.all, key = { it.id }) { item ->
             ShapeTile(stringResource(item.nameRes), selected = shape == item, enabled = enabled, onClick = { onChange(item) }) { color ->
-                // The icon is the shape itself, drawn from the same outline the widget uses.
-                Canvas(Modifier.fillMaxSize()) {
-                    val boxWidth = kotlin.math.min(size.width, size.height * item.aspect)
-                    val boxHeight = boxWidth / item.aspect
-                    val path = item.path(boxWidth, boxHeight).asComposePath()
-                    path.translate(Offset((size.width - boxWidth) / 2, (size.height - boxHeight) / 2))
-                    drawPath(path, color)
+                ShapeIcon(item, color)
+            }
+        }
+        // The custom shape this widget uses, so you can see it's on.
+        if (shape is CustomShape) {
+            item(key = shape.id) {
+                ShapeTile(stringResource(R.string.shape_your_shape), selected = true, enabled = enabled, onClick = {}) { color ->
+                    ShapeIcon(shape, color)
                 }
+            }
+        }
+        item {
+            ShapeTile(stringResource(R.string.shape_custom), selected = false, enabled = enabled, onClick = onOpenLibrary) { color ->
+                Icon(painterResource(R.drawable.ic_add), contentDescription = null, tint = color, modifier = Modifier.fillMaxSize())
             }
         }
     }
 }
 
+/**
+ * A shape's icon, in [color]: the shape itself. Built-in shapes are drawn from their outline,
+ * custom shapes from their mask (gray parts come out half see-through).
+ */
 @Composable
-private fun ShapeTile(
-    name: String,
+fun ShapeIcon(shape: WidgetShape, color: Color, modifier: Modifier = Modifier.fillMaxSize()) {
+    if (shape.hasOutline) {
+        Canvas(modifier) {
+            val boxWidth = kotlin.math.min(size.width, size.height * shape.aspect)
+            val boxHeight = boxWidth / shape.aspect
+            val path = shape.path(boxWidth, boxHeight).asComposePath()
+            path.translate(Offset((size.width - boxWidth) / 2, (size.height - boxHeight) / 2))
+            drawPath(path, color)
+        }
+    } else {
+        // A small mask is plenty for an icon (made once per shape).
+        val side = 160
+        val mask = remember(shape) {
+            val w = if (shape.aspect >= 1f) side else (side * shape.aspect).toInt().coerceAtLeast(1)
+            val h = if (shape.aspect >= 1f) (side / shape.aspect).toInt().coerceAtLeast(1) else side
+            ShapeMask.render(shape, w, h).asImageBitmap()
+        }
+        Canvas(modifier) {
+            val boxWidth = kotlin.math.min(size.width, size.height * shape.aspect)
+            val boxHeight = boxWidth / shape.aspect
+            drawImage(
+                mask,
+                dstOffset = androidx.compose.ui.unit.IntOffset(((size.width - boxWidth) / 2).toInt(), ((size.height - boxHeight) / 2).toInt()),
+                dstSize = IntSize(boxWidth.toInt().coerceAtLeast(1), boxHeight.toInt().coerceAtLeast(1)),
+                colorFilter = ColorFilter.tint(color, BlendMode.SrcIn),
+                filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium
+            )
+        }
+    }
+}
+
+/** A shape choice: an icon tile with its name under it ([name] null = no name, e.g. in the library). */
+@Composable
+internal fun ShapeTile(
+    name: String?,
     selected: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
@@ -169,6 +218,7 @@ private fun ShapeTile(
         ) {
             icon(if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant)
         }
+        if (name == null) return@Column
         Spacer(Modifier.height(4.dp))
         Text(
             name,

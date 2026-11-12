@@ -31,11 +31,28 @@ open class WidgetShape(
     val aspect: Float,
     private val drawUnit: Path.() -> Unit
 ) {
-    /** The shape's outline, sized to [width] x [height] pixels. */
-    fun path(width: Float, height: Float): Path {
+    /**
+     * The shape's outline, sized to [width] x [height] pixels. Shapes made from a picture (custom
+     * shapes) have no outline ([hasOutline] = false): theirs is just the box.
+     */
+    open fun path(width: Float, height: Float): Path {
         val path = Path().apply(drawUnit)
         path.transform(Matrix().apply { setScale(width, height) })
         return path
+    }
+
+    /** False for shapes made from a picture: those are drawn from [renderMask] only. */
+    open val hasOutline: Boolean get() = true
+
+    /**
+     * The shape's mask, [width] x [height]: white where the picture shows, see-through where it's
+     * cut, partly see-through in between. Outline shapes draw their path, anti-aliased.
+     */
+    open fun renderMask(width: Int, height: Int): Bitmap {
+        val mask = createBitmap(width.coerceAtLeast(1), height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE } // anti-aliased = soft edges
+        Canvas(mask).drawPath(path(mask.width.toFloat(), mask.height.toFloat()), paint)
+        return mask
     }
 
     /** This shape as drawn on a widget of [widthDp] x [heightDp]. */
@@ -49,13 +66,19 @@ open class WidgetShape(
 }
 
 /**
- * An arch: straight sides and bottom, a round top. It takes the widget's whole shape (a tall
- * widget gets a tall arch); the top is a half circle as wide as the widget, or, on widgets too wide
- * for that, corners as round as the height allows. Sized ids look like "arch@1.50" (the widget's
- * width / height, in steps of 0.05, so small size changes don't re-cut the frames).
+ * A shape that takes the widget's whole shape: a rectangle as wide and tall as the widget, with
+ * some corners rounded ([cornerRadii]: for a box [aspect] wide and 1 tall, the x/y radius of the
+ * top-left, top-right, bottom-right and bottom-left corners). The corners stay true quarter circles,
+ * so a wider widget gets a wider shape, not a stretched one (Arch, Leaf).
+ * Sized ids look like "arch@1.50" (the widget's width / height, in steps of 0.05, so small size
+ * changes don't re-cut the frames). [iconAspect]: the picker icon's (and a not-yet-sized widget's) box.
  */
-class ArchPattern(id: String, @StringRes nameRes: Int) :
-    WidgetShape(id, nameRes, aspect = ICON_ASPECT, drawUnit = { arch(ICON_ASPECT) }) {
+class FillPattern(
+    id: String,
+    @StringRes nameRes: Int,
+    iconAspect: Float,
+    private val cornerRadii: (aspect: Float) -> FloatArray
+) : WidgetShape(id, nameRes, aspect = iconAspect, drawUnit = { roundedBox(iconAspect, cornerRadii(iconAspect)) }) {
 
     private val sized = HashMap<Int, WidgetShape>()
 
@@ -74,19 +97,14 @@ class ArchPattern(id: String, @StringRes nameRes: Int) :
         }
     }
 
-    private class Sized(val parent: ArchPattern, id: String, aspect: Float) :
-        WidgetShape(id, parent.nameRes, aspect, drawUnit = { arch(aspect) }) {
+    private class Sized(val parent: FillPattern, id: String, aspect: Float) :
+        WidgetShape(id, parent.nameRes, aspect, drawUnit = { roundedBox(aspect, parent.cornerRadii(aspect)) }) {
         override val base: WidgetShape get() = parent
     }
 
     companion object {
-        /** The picker icon's (and a not-yet-sized widget's) arch: a bit taller than wide. */
-        private const val ICON_ASPECT = 0.85f
-
-        /** An arch [aspect] wide and 1 tall, squeezed into the 1 x 1 square (the box stretches it back). */
-        private fun Path.arch(aspect: Float) {
-            val radius = min(aspect / 2, 1f)
-            val radii = floatArrayOf(radius, radius, radius, radius, 0f, 0f, 0f, 0f) // round top corners only
+        /** A box [aspect] wide and 1 tall with these corner radii, squeezed into the 1 x 1 square (the box stretches it back). */
+        private fun Path.roundedBox(aspect: Float, radii: FloatArray) {
             val real = Path().apply { addRoundRect(android.graphics.RectF(0f, 0f, aspect, 1f), radii, Path.Direction.CW) }
             real.transform(Matrix().apply { setScale(1f / aspect, 1f) })
             addPath(real)
@@ -320,12 +338,27 @@ object Shapes {
         return points
     }
 
-    /** An arch that takes the widget's shape (see ArchPattern). */
-    val ARCH = ArchPattern("arch", R.string.shape_arch)
+    /**
+     * An arch that takes the widget's shape: straight sides and bottom, the top a half circle as wide
+     * as the widget (or, on widgets too wide for that, corners as round as the height allows).
+     */
+    val ARCH = FillPattern("arch", R.string.shape_arch, iconAspect = 0.85f) { aspect ->
+        val radius = min(aspect / 2, 1f)
+        floatArrayOf(radius, radius, radius, radius, 0f, 0f, 0f, 0f) // round top corners only
+    }
+
+    /**
+     * A leaf that takes the widget's shape: top-left and bottom-right corners round (about half the
+     * shorter side, the user's "2. Like yours"), the other two sharp.
+     */
+    val LEAF = FillPattern("leaf", R.string.shape_leaf, iconAspect = 1f) { aspect ->
+        val radius = 0.48f * min(aspect, 1f)
+        floatArrayOf(radius, radius, 0f, 0f, radius, radius, 0f, 0f)
+    }
 
     /** In the order the editor shows them (after "None"). */
     val all: List<WidgetShape> =
-        listOf(CIRCLE, HEART, STAR, CHONKY_STAR, SPARKLE, SCALLOP, CLOVER, FLOWER, BURST, DOTS, ARCH, MOON)
+        listOf(CIRCLE, HEART, STAR, CHONKY_STAR, SPARKLE, SCALLOP, CLOVER, FLOWER, BURST, DOTS, ARCH, MOON, LEAF)
 
     /**
      * Fits a drawing into the 1 x 1 square, centered, proportions kept. [items] are circles
@@ -485,11 +518,13 @@ object Shapes {
     }
 
     /**
-     * The shape saved under [id], or null for "None" (or a shape this version doesn't know).
-     * Also reads a pattern's sized id, like "dots@6x3".
+     * The shape saved under [id], or null for "None" (or a shape this version doesn't know, or a
+     * custom shape whose picture is gone: those count as no shape). Also reads a pattern's sized
+     * id, like "dots@6x3", and custom shapes ("custom:<number>", see CustomShapes).
      */
-    fun byId(id: String?): WidgetShape? {
+    fun byId(context: android.content.Context, id: String?): WidgetShape? {
         if (id == null) return null
+        if (id.startsWith(CustomShapes.PREFIX)) return CustomShapes.get(context, id)
         val shape = all.firstOrNull { it.id == id.substringBefore('@') } ?: return null
         if ('@' !in id) return shape
         return shape.sized(id.substringAfter('@')) ?: shape
@@ -504,10 +539,5 @@ object Shapes {
  */
 object ShapeMask {
 
-    fun render(shape: WidgetShape, width: Int, height: Int): Bitmap {
-        val mask = createBitmap(width.coerceAtLeast(1), height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE } // anti-aliased = soft edges
-        Canvas(mask).drawPath(shape.path(mask.width.toFloat(), mask.height.toFloat()), paint)
-        return mask
-    }
+    fun render(shape: WidgetShape, width: Int, height: Int): Bitmap = shape.renderMask(width, height)
 }

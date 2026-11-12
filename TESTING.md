@@ -30,6 +30,9 @@ Real devices that can't be emulated: Samsung (One UI), Xiaomi (MIUI/HyperOS), On
 - [ ] Shape back to None: the widget looks exactly like before (full rounded background again)
 - [ ] Zoom: Reposition in Fit and Fill; pinch in/out and the slider snap (tick) on Fit and Fill; zoom out past Fit shows the background
 - [ ] Zoom: Cancel/Back restores the old zoom; Fit/Fill buttons snap (none lit for your own zoom); saved zoom survives resizing
+- [ ] Custom shapes: transparent PNG (uses its see-through parts), black and white drawing (black = shape), color photo (dark parts = shape), picture with lots of empty border (trimmed), all-white picture / 60 MB / broken file (friendly message)
+- [ ] Custom shapes: add from the editor (Custom) and from Settings; use on a GIF, a video and a still; zoom/Reposition; resize
+- [ ] Custom shapes: delete one used by 2 widgets (both go back to no shape, editor shows None), delete an unused one; restart the app
 - [ ] Speed 0.25x and 3x; FPS cap 10 vs 30 in Settings changes all widgets right away
 - [ ] Reboot the emulator: every widget comes back and animates
 - [ ] Remove a widget from the home screen: its card disappears and storage drops

@@ -83,8 +83,11 @@ object GifStorage {
      * Checks the size limit (before and while copying) and free storage first.
      * Slow, so call it off the main thread. Throws [ImportException] with a friendly message.
      */
-    fun importFile(context: Context, uri: Uri, appWidgetId: Int): ImportedFile {
-        val target = importCopyFile(context, appWidgetId)
+    fun importFile(context: Context, uri: Uri, appWidgetId: Int): ImportedFile =
+        importFile(context, uri, importCopyFile(context, appWidgetId))
+
+    /** Like [importFile], copying to [target] (e.g. a picture for a custom shape). */
+    fun importFile(context: Context, uri: Uri, target: File): ImportedFile {
         return friendlyErrors(cleanUp = { target.delete() }) {
             val (name, reportedSize) = nameAndSize(context, uri)
             if (reportedSize != null && reportedSize > MAX_FILE_BYTES) throw tooLarge(context, reportedSize, MAX_FILE_BYTES)

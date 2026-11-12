@@ -63,8 +63,9 @@ RemoteViews can't play GIFs directly, so:
     `WidgetSizes.shapeFor(context, id, shape)` before using aspect / path / mask (WidgetFrames.make + refreshIfNeeded,
     the editor's `drawnShape`); save only the picked (base) shape in `shape_<id>`. `fit_shape_<id>` stores the sized id, so a
     resize that changes the grid re-cuts the frames. `Shapes.byId` reads sized ids via `WidgetShape.sized(key)` (used by the app's cards).
-    `ArchPattern` ("Arch"): fills the widget's whole shape, top = half circle as wide as the widget (or corners as
-    round as the height allows on very wide widgets); sized by aspect in 0.05 steps (`arch@1.50`). `ShapeMask.render` draws the
+    `FillPattern`: fills the widget's whole shape, a rectangle with some corners rounded (true quarter circles, radii
+    from the aspect); sized by aspect in 0.05 steps (`arch@1.50`). Arch (top = half circle as wide as the widget, or as
+    round as the height allows) and Leaf (top-left + bottom-right radius 0.48 x shorter side, user's "2. Like yours"). `ShapeMask.render` draws the
   anti-aliased mask (white = shown, transparent = cut, partial alpha = partly see-through) and is the ONE source for
   widget frames, widget background and editor/card previews (`ui/ShapeUi.kt`: `ShapedBox`, `ShapePicker`; picker icons
   are drawn from the same path). Planned later: zoom in Reposition, custom shapes from photos, library, Pixelify, Reverse, painter.
@@ -83,7 +84,26 @@ RemoteViews can't play GIFs directly, so:
     the preview; frames are made on Save. Going from None to a shape opens Reposition once per editor visit (Fit or Fill).
   - RAM: `UsageHealth.widgetCost` counts the mask as one extra frame when `frames.masked`; the per-widget pixel budget in
     `deriveWidgetFrames` counts it too.
-- Zoom (v1.1, `gif/Zoom.kt`, shared by editor preview, Reposition and frame baking): the "box" = shape box, or the widget
+- Custom shapes (v1.1, `shape/CustomShapes.kt`, `ui/ShapeLibraryUi.kt`): any picture becomes a cutter. A shape either draws
+  its outline (`WidgetShape.path`, `hasOutline`) or supplies a mask picture (`renderMask`); `ShapeMask.render` calls
+  `renderMask`, so frames, background layer, previews, RAM count, zoom and resize re-cuts work unchanged.
+  - Making one (`CustomShapes.makeMask`): photo picker / Files (image only), copied to `cache/shape-import` with the same
+    50 MB checks (`GifStorage.importFile(..., target)`), decoded by `StillImageDecoder` (EXIF) at <= 1600 px, copy deleted.
+    Any pixel with alpha < 255 -> use alpha, else darkness (black = the shape, white = cut, gray partly; the Pinterest
+    stencil convention, chosen by the user). Empty borders
+    (<= 8/255) trimmed; nothing left -> `error_shape_empty`. Shrunk to <= 512 px, own proportions, white + alpha.
+  - Library: `files/shapes/<number>.png` (lossless PNG, also the thumbnail; original never kept), newest first.
+    Widgets store `shape_<id>` = "custom:<number>" (no per-widget copy; packs can ship the PNGs later). `Shapes.byId(context,
+    id)` resolves it via `CustomShapes.get` (digits only, cached per id); a missing file = no shape (never crash), and
+    `refreshAll` on app open re-cuts such widgets without a shape.
+  - UI: the Shape row ends with the custom shape in use (if any) and "Custom" -> bottom sheet (library + "Add new shape").
+    Settings > "Your shapes": same grid; tap = bigger preview + Delete. Add flow (`AddShapeDialogs`): Gallery/Files ->
+    "Making your shape" -> preview (shape in color over a checkerboard) -> "Use this shape" / "Cancel".
+    Icons/thumbnails are the shape itself (`ShapeIcon`: outline, or the mask tinted).
+  - Delete (`CustomShapes.delete`): confirm (says how many widgets use it), PNG removed, each user widget: `saveShape(null)`
+    + `refreshIfNeeded` (re-cut, old frames deleted; never RAM-limited) + redraw.
+  - Reposition (`ZoomView`) dims outside a custom shape with its mask (DstOut on a layer), since there's no outline.
+, shared by editor preview, Reposition and frame baking): the "box" = shape box, or the widget
   without a shape. Zoom 1 = Fill (picture just covers the box); `fitZoom` = Fit (whole picture just fits, <= 1).
   `Zoom.box()` = the part of the picture the box shows, in picture pixels (can reach past the picture when zoomed out):
   where the picture is bigger than the box, the box stays inside it; where smaller, the picture stays inside the box
