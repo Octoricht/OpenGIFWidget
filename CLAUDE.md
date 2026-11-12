@@ -68,7 +68,13 @@ RemoteViews can't play GIFs directly, so:
     turn (null = off; choices 12..1 s, default 4), `fit_spin_<id>` = what the frames were made with (`WidgetFrames.spinFor`
     ignores spin for shapes that can't spin). The playback speed slider also speeds up the spin. Editor: a switch under
     the Shape row only for the CD, and a speed slider only once it's on (`SpinControls`); the preview spins live
-    (`Modifier.spinning`, rotation inside the shape's mask). Mask-only (`hasOutline` = false), so partial transparency shows everywhere.
+    (`Modifier.spinning`, rotation inside the shape's mask).
+  - Shine (`WidgetShape.renderShine`, the CD only, user's choices): a light layer drawn on top AFTER the mask (and after
+    the spin turn, so the light stays still): white glints on the clear plastic only (two lobes from the top left via a
+    SweepGradient, never fully opaque), bright edges on the ridges, a very faint rainbow line at the hub/label edge and
+    the rim, a soft one-sided airbrush haze on the label (top left, up to 20%, gone before the middle), and a very faint
+    airbrush grain on the label (fixed seed, so frames never flicker). Baked into each widget
+    frame in `deriveWidgetFrames`; `ShapedBox` draws it on top in the editor (not on cards: their frames already have it). Mask-only (`hasOutline` = false), so partial transparency shows everywhere.
   - Patterns (`DotsPattern`, the "Dots" shape: 3x3-style grid of slightly overlapping dots, user's "2. Stuck together"):
     the dots keep ~56 dp; a bigger widget gets more dots, not bigger ones. `WidgetShape.forSize(dp)` returns the sized shape
     (`dots@6x3`, aspect = grid's, cached per grid) and `base` the picked one. ALWAYS resolve with

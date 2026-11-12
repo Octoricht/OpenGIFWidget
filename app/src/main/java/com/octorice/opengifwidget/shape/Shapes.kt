@@ -41,6 +41,12 @@ open class WidgetShape(
         return path
     }
 
+    /**
+     * Light drawn on top of the cut picture ([width] x [height], same box as the mask), or null for
+     * none. The CD's clear plastic is shiny. It never turns with a spinning picture: the light stays put.
+     */
+    open fun renderShine(width: Int, height: Int): Bitmap? = null
+
     /** True for shapes the picture can spin under (the CD): the editor then offers "Make the CD spin". */
     open val spins: Boolean get() = false
 
@@ -192,11 +198,19 @@ class RingsShape(
     id: String,
     @StringRes nameRes: Int,
     private val rings: List<Pair<Float, Float>>,
-    private val canSpin: Boolean = false
+    private val canSpin: Boolean = false,
+    private val shine: (Canvas.(centerX: Float, centerY: Float, radius: Float) -> Unit)? = null
 ) : WidgetShape(id, nameRes, aspect = 1f, drawUnit = { addOval(0f, 0f, 1f, 1f, Path.Direction.CW) }) {
 
     override val hasOutline: Boolean get() = false
     override val spins: Boolean get() = canSpin
+
+    override fun renderShine(width: Int, height: Int): Bitmap? {
+        val draw = shine ?: return null
+        val bitmap = createBitmap(width.coerceAtLeast(1), height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+        Canvas(bitmap).draw(bitmap.width / 2f, bitmap.height / 2f, min(bitmap.width, bitmap.height) / 2f)
+        return bitmap
+    }
 
     override fun renderMask(width: Int, height: Int): Bitmap {
         val mask = createBitmap(width.coerceAtLeast(1), height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
@@ -409,8 +423,93 @@ object Shapes {
             0.150f to 0.55f, // lip of the hole
             0.135f to 0.00f  // center hole (a bit bigger than a real disc's, chosen by the user)
         ),
-        canSpin = true
+        canSpin = true,
+        shine = { cx, cy, r -> cdShine(cx, cy, r) }
     )
+
+    /**
+     * The CD's shine (user's choices): white light on the clear plastic only, never fully opaque,
+     * a very faint rainbow edge, a soft airbrush haze on the label from one side, and a very faint
+     * airbrush grain on the printed label.
+     * Light comes from the top left: two glints across from each other, softer in between.
+     */
+    private fun Canvas.cdShine(cx: Float, cy: Float, r: Float) {
+        fun white(opacity: Float) = Color.argb((opacity * 255).roundToInt(), 255, 255, 255)
+        fun ring(inner: Float, outer: Float) = Path().apply {
+            fillType = Path.FillType.EVEN_ODD
+            addCircle(cx, cy, outer * r, Path.Direction.CW)
+            addCircle(cx, cy, inner * r, Path.Direction.CW)
+        }
+        // Around the disc (0 = right, going clockwise): bright glint at the top left (~225 deg),
+        // a weaker one across from it (~45 deg), dim in between.
+        val stops = floatArrayOf(0f, 0.125f, 0.25f, 0.375f, 0.5f, 0.625f, 0.75f, 0.875f, 1f)
+        fun glint(strength: Float) = android.graphics.SweepGradient(
+            cx, cy,
+            intArrayOf(
+                white(0.06f * strength), white(0.32f * strength), white(0.06f * strength), white(0.02f * strength),
+                white(0.06f * strength), white(0.48f * strength), white(0.06f * strength), white(0.02f * strength),
+                white(0.06f * strength)
+            ),
+            stops
+        )
+        val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+        // Clear plastic: the hub (with the stacking ring), the lip of the hole, the outer rim.
+        fill.shader = glint(1f)
+        drawPath(ring(0.150f, 0.220f), fill)
+        drawPath(ring(0.985f, 1.000f), fill)
+        fill.shader = glint(1.3f)
+        drawPath(ring(0.135f, 0.150f), fill)
+        // Bright edges where the plastic steps (light catching the ridges).
+        val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = max(1f, r * 0.008f)
+            shader = glint(1.6f)
+        }
+        for (radius in floatArrayOf(0.150f, 0.175f, 0.190f)) drawCircle(cx, cy, radius * r, edge)
+        // A very faint rainbow line where the clear plastic meets the label, and at the rim.
+        val rainbow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = max(1f, r * 0.006f)
+            val a = 40 // ~15%
+            shader = android.graphics.SweepGradient(
+                cx, cy,
+                intArrayOf(
+                    Color.argb(a, 255, 80, 80), Color.argb(a, 255, 220, 80), Color.argb(a, 80, 255, 120),
+                    Color.argb(a, 80, 200, 255), Color.argb(a, 170, 90, 255), Color.argb(a, 255, 80, 80)
+                ),
+                null
+            )
+        }
+        drawCircle(cx, cy, 0.217f * r, rainbow)
+        drawCircle(cx, cy, 0.988f * r, rainbow)
+        // Airbrush haze on the label from one side (the top left, where the light comes from): a soft
+        // white glare, brightest at that edge and gone before the middle. Visible, but gentler than on a real disc.
+        val haze = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = android.graphics.LinearGradient(
+                cx - r * 0.85f, cy - r * 0.85f, cx + r * 0.15f, cy + r * 0.15f,
+                intArrayOf(white(0.20f), white(0.09f), white(0f)),
+                floatArrayOf(0f, 0.45f, 1f),
+                android.graphics.Shader.TileMode.CLAMP
+            )
+        }
+        drawPath(ring(0.222f, 0.985f), haze)
+        // Airbrush grain on the label: tiny white specks, mostly invisible, a few a bit brighter.
+        // Always the same pattern (fixed seed), so frames never flicker.
+        val size = (2 * r).roundToInt().coerceAtLeast(1)
+        val grain = IntArray(size * size)
+        val random = java.util.Random(7)
+        for (y in 0 until size) {
+            for (x in 0 until size) {
+                val d = kotlin.math.hypot(x + 0.5f - r, y + 0.5f - r) / r
+                val n = random.nextFloat()
+                if (d in 0.222f..0.983f) grain[y * size + x] = ((n * n * n) * 26).roundToInt() shl 24 or 0xFFFFFF
+            }
+        }
+        val noise = createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        noise.setPixels(grain, 0, size, 0, 0, size, size)
+        drawBitmap(noise, cx - r, cy - r, null)
+        noise.recycle()
+    }
 
     /** In the order the editor shows them (after "None"). */
     val all: List<WidgetShape> =

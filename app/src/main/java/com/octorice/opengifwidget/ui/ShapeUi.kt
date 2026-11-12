@@ -76,6 +76,10 @@ fun ShapedBox(
         val boxHeight = boxWidth / shape.aspect
         val sizePx = with(LocalDensity.current) { IntSize(boxWidth.roundToPx(), boxHeight.roundToPx()) }
         val mask = rememberMask(shape, sizePx)
+        // The shape's light on top (the CD's shiny plastic). Cards show frames that already have it.
+        val shine = remember(shape, sizePx, cutContent) {
+            if (cutContent) shape.renderShine(sizePx.width, sizePx.height)?.asImageBitmap() else null
+        }
         val tint = Color(background.color)
         val alpha = background.alpha / 255f
         Box(
@@ -84,6 +88,11 @@ fun ShapedBox(
                 // The background: the mask tinted with the color, faded to the opacity (like the widget).
                 .drawBehind {
                     if (alpha > 0f) drawImage(mask, alpha = alpha, colorFilter = ColorFilter.tint(tint, BlendMode.SrcIn))
+                }
+                // The light last, on top of the (maybe spinning) picture, so it stays still.
+                .drawWithContent {
+                    drawContent()
+                    shine?.let { drawImage(it) }
                 }
         ) {
             Box(

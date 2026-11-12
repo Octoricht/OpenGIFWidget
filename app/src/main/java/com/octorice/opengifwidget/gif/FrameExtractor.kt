@@ -393,6 +393,8 @@ object FrameExtractor {
         // the frame's transparency by the mask's), so soft edges and gray areas work.
         val mask = shape?.let { ShapeMask.render(it, outWidth, outHeight) }
         val maskPaint = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
+        // The shape's light (the CD's shiny plastic), drawn on top after cutting. Not turned by a spin.
+        val shine = shape?.renderShine(outWidth, outHeight)
         var masterFrame: Bitmap? = null
         try {
             if (mask != null) FrameFiles.writeWebp(mask, File(outDir, FrameFiles.MASK_FILE_NAME), MASK_QUALITY)
@@ -417,12 +419,14 @@ object FrameExtractor {
                 canvas.restore()
                 if (corners != null) canvas.drawPath(corners, erasePaint)
                 if (mask != null) canvas.drawBitmap(mask, 0f, 0f, maskPaint)
+                if (shine != null) canvas.drawBitmap(shine, 0f, 0f, null)
                 FrameFiles.writeWebp(output, File(outDir, FrameFiles.frameFileName(index)), quality)
                 onProgress(index + 1, steps.size)
             }
         } finally {
             output.recycle()
             mask?.recycle()
+            shine?.recycle()
             masterFrame?.recycle()
         }
 
