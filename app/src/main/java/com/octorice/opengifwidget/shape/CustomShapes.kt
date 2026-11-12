@@ -90,11 +90,11 @@ object CustomShapes {
         }
     }
 
-    /** Every saved shape, newest first. Reads files: call it off the main thread. */
+    /** Every saved shape, oldest first (a new one shows up last, next to "+"). Reads files: call it off the main thread. */
     fun all(context: Context): List<CustomShape> =
         dir(context).listFiles { file -> file.name.matches(Regex("\\d+\\.png")) }
             .orEmpty()
-            .sortedByDescending { it.name.removeSuffix(".png").toLongOrNull() ?: 0L }
+            .sortedBy { it.name.removeSuffix(".png").toLongOrNull() ?: 0L }
             .mapNotNull { get(context, PREFIX + it.name.removeSuffix(".png")) }
 
     /**

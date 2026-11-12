@@ -95,9 +95,9 @@ RemoteViews can't play GIFs directly, so:
   - Library: `files/shapes/<number>.png` (lossless PNG, also the thumbnail; original never kept), newest first.
     Widgets store `shape_<id>` = "custom:<number>" (no per-widget copy; packs can ship the PNGs later). `Shapes.byId(context,
     id)` resolves it via `CustomShapes.get` (digits only, cached per id); a missing file = no shape (never crash), and
-    `refreshAll` on app open re-cuts such widgets without a shape.
-  - UI: the Shape row ends with the custom shape in use (if any) and "Custom" -> bottom sheet (library + "Add new shape").
-    Settings > "Your shapes": same grid; tap = bigger preview + Delete. Add flow (`AddShapeDialogs`): Gallery/Files ->
+    `refreshAll` on app open re-cuts such widgets without a shape. The library is listed oldest first.
+  - UI: the Shape row = None, built-ins, your shapes (oldest first, no names), then always last the "+" tile
+    ("Add new shape", opens the add flow; the new shape is applied). Settings > "Your shapes": a grid in the same order; tap = bigger preview + Delete. Add flow (`AddShapeDialogs`): Gallery/Files ->
     "Making your shape" -> preview (shape in color over a checkerboard) -> "Use this shape" / "Cancel".
     Icons/thumbnails are the shape itself (`ShapeIcon`: outline, or the mask tinted).
   - Delete (`CustomShapes.delete`): confirm (says how many widgets use it), PNG removed, each user widget: `saveShape(null)`

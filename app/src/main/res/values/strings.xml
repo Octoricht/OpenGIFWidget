@@ -189,8 +189,7 @@
     <string name="shape_arch">Arch</string>
     <string name="shape_moon">Moon</string>
     <string name="shape_leaf">Leaf</string>
-    <string name="shape_custom">Custom</string>
-    <string name="shape_your_shape">Your shape</string>
+    <string name="shape_custom">Your shape</string>
     <string name="shapes_library_title">Your shapes</string>
     <string name="shapes_library_description">Turn any picture into a shape. See-through parts are cut away. Pictures without see-through parts use their dark parts: black is the shape, white is cut away, gray is half see-through.</string>
     <string name="shapes_library_empty">No shapes yet.</string>

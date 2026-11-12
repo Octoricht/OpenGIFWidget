@@ -109,11 +109,17 @@ fun ShapedBox(
 }
 
 /**
- * "None", every built-in shape, the custom shape in use (if any), then "Custom", which opens the
- * shape library ([onOpenLibrary]). Small tiles, scrolling sideways.
+ * "None", every built-in shape, then your own shapes ([customShapes], oldest first), and always last
+ * the "+" tile that adds a new one ([onAdd]). Small tiles, scrolling sideways.
  */
 @Composable
-fun ShapePicker(shape: WidgetShape?, enabled: Boolean, onOpenLibrary: () -> Unit, onChange: (WidgetShape?) -> Unit) {
+fun ShapePicker(
+    shape: WidgetShape?,
+    customShapes: List<CustomShape>,
+    enabled: Boolean,
+    onAdd: () -> Unit,
+    onChange: (WidgetShape?) -> Unit
+) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             ShapeTile(stringResource(R.string.shape_none), selected = shape == null, enabled = enabled, onClick = { onChange(null) }) { color ->
@@ -132,16 +138,14 @@ fun ShapePicker(shape: WidgetShape?, enabled: Boolean, onOpenLibrary: () -> Unit
                 ShapeIcon(item, color)
             }
         }
-        // The custom shape this widget uses, so you can see it's on.
-        if (shape is CustomShape) {
-            item(key = shape.id) {
-                ShapeTile(stringResource(R.string.shape_your_shape), selected = true, enabled = enabled, onClick = {}) { color ->
-                    ShapeIcon(shape, color)
-                }
+        // Your shapes (no names: the icon is the shape itself).
+        items(customShapes, key = { it.id }) { item ->
+            ShapeTile(name = null, selected = shape == item, enabled = enabled, onClick = { onChange(item) }) { color ->
+                ShapeIcon(item, color)
             }
         }
         item {
-            ShapeTile(stringResource(R.string.shape_custom), selected = false, enabled = enabled, onClick = onOpenLibrary) { color ->
+            ShapeTile(stringResource(R.string.shapes_add), selected = false, enabled = enabled, onClick = onAdd) { color ->
                 Icon(painterResource(R.drawable.ic_add), contentDescription = null, tint = color, modifier = Modifier.fillMaxSize())
             }
         }

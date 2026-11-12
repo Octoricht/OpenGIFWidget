@@ -106,10 +106,8 @@ import com.octorice.opengifwidget.data.WidgetBackground
 import com.octorice.opengifwidget.data.friendlyErrors
 import com.octorice.opengifwidget.ui.BackgroundPicker
 import com.octorice.opengifwidget.ui.ShapePicker
-import com.octorice.opengifwidget.ui.ShapeLibraryGrid
 import com.octorice.opengifwidget.ui.AddShapeDialogs
 import com.octorice.opengifwidget.ui.rememberShapeLibrary
-import androidx.compose.material3.ModalBottomSheet
 import com.octorice.opengifwidget.gif.Zoom
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.draw.clipToBounds
@@ -516,8 +514,7 @@ private fun EditorScreen(
     var shapeRepositionShown by remember { mutableStateOf(false) }
     // Opens Reposition on the next frame, once the preview knows the new shape's box.
     var openRepositionSoon by remember { mutableStateOf(false) }
-    // The shape library sheet ("Custom") and its "Add new shape" steps.
-    var showLibrary by remember { mutableStateOf(false) }
+    // Your shapes (shown in the Shape row) and the "Add new shape" steps.
     var addingShape by remember { mutableStateOf(false) }
     val library = rememberShapeLibrary()
     // Fill: the picture is locked until you tap "Reposition" (no accidental moves). Cancel goes back here.
@@ -738,30 +735,12 @@ private fun EditorScreen(
         }
     }
 
-    // "Custom": the shape library (your shapes + "Add new shape"), as a sheet from the bottom.
-    if (showLibrary) {
-        ModalBottomSheet(onDismissRequest = { showLibrary = false }) {
-            Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 24.dp)) {
-                SectionTitle(stringResource(R.string.shapes_library_title))
-                ShapeLibraryGrid(
-                    shapes = library.shapes,
-                    selected = shape,
-                    enabled = busy == null,
-                    onPick = { picked ->
-                        showLibrary = false
-                        pickShape(picked)
-                    },
-                    onAdd = { addingShape = true }
-                )
-            }
-        }
-    }
+    // "+" at the end of the Shape row: add a new shape to your library, then use it here.
     AddShapeDialogs(
         open = addingShape,
         onClose = { addingShape = false },
         onAdded = { added ->
             library.reload()
-            showLibrary = false
             pickShape(added)
         }
     )
@@ -973,7 +952,13 @@ private fun EditorScreen(
 
                     Spacer(Modifier.height(24.dp))
                     SectionTitle(stringResource(R.string.editor_shape))
-                    ShapePicker(shape, enabled = busy == null, onOpenLibrary = { showLibrary = true }, onChange = pickShape)
+                    ShapePicker(
+                        shape,
+                        customShapes = library.shapes,
+                        enabled = busy == null,
+                        onAdd = { addingShape = true },
+                        onChange = pickShape
+                    )
 
                     // Android 8-11 don't round widget corners, so a Fill picture's corners are square there.
                     // Newer versions never see this switch. A shape replaces it.
