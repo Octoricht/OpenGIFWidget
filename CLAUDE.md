@@ -155,6 +155,8 @@ RemoteViews can't play GIFs directly, so:
   APK that crashed at startup with IllegalAccessError). android-gif-drawable keeps `GifInfoHandle` (native) by itself.
   Always smoke-test the release APK (sign with the debug key to install over the dev build).
 - `FrameLimits.forDevice()`: low-RAM phones (isLowRamDevice or memoryClass <= 128) get smaller widget frames.
+- Editor layout: the preview (and Reposition) is pinned at the top, at most 40% of the screen height and 380dp;
+  everything else scrolls underneath it. The editor's title bar is 48dp tall (not 64) to leave more room.
 - Layouts: main grid `StaggeredGridCells.Adaptive(170.dp)`, editor/Settings max width 640dp, trim dialog scrolls,
   no fixed heights around text. Widget preview: `drawable-nodpi/widget_preview.png` + `layout/widget_preview.xml`.
 - Settings > Reliability explains per-brand battery settings; opens ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS

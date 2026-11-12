@@ -741,7 +741,9 @@ private fun EditorScreen(
                     IconButton(onClick = onClose, enabled = busy == null) {
                         Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.editor_close))
                     }
-                }
+                },
+                // Shorter than the usual 64dp: more room for the settings under the pinned preview.
+                expandedHeight = 48.dp
             )
         },
         bottomBar = {
@@ -756,213 +758,225 @@ private fun EditorScreen(
             )
         }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(scrollState)
-                // On tablets and in landscape, keep a readable width in the middle.
-                .wrapContentWidth()
-                .widthIn(max = 640.dp)
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Preview(
-                image = image,
-                background = background,
-                scaleMode = scaleMode,
-                shape = drawnShape,
-                aspectRatio = widgetAspectRatio,
-                cropCenter = { shownCenter },
-                zoom = { zoom },
-                fitZoom = fitZoom,
-                minZoom = minZoom,
-                maxZoom = maxZoom,
-                onZoomChange = { newZoom, newCenter ->
-                    customZoom = newZoom
-                    cropCenter = newCenter
-                },
-                repositioning = repositioning,
-                canReposition = image != null && busy == null,
-                onStartReposition = { startReposition() },
-                onEndReposition = { keep -> endReposition(keep) },
-                // Shows the corners the widget will really have (square on Android 8-11 when switched off).
-                squareCorners = shape == null && WidgetSizes.needsRoundedFrames &&
-                    (scaleMode == ScaleMode.FILL || customZoom != null) && !roundCorners
-            )
-
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = when {
-                    shownGif == null -> stringResource(R.string.editor_nothing_picked)
-                    master == null -> shownGif.name
-                    master.frameCount == 1 -> stringResource(
-                        R.string.editor_info_still,
-                        shownGif.name, master.width, master.height,
-                        Formatter.formatShortFileSize(context, shownGif.sizeBytes)
-                    )
-                    else -> pluralStringResource(
-                        R.plurals.editor_info_frames,
-                        master.sourceFrameCount,
-                        shownGif.name, master.sourceFrameCount,
-                        Formatter.formatShortFileSize(context, shownGif.sizeBytes)
-                    )
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            if (shownGif != null) {
-                Spacer(Modifier.height(16.dp))
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = {
-                        name = it.take(MAX_NAME_LENGTH)
-                        nameEdited = true
-                    },
-                    label = { Text(stringResource(R.string.editor_name)) },
-                    placeholder = { Text(WidgetStore.defaultName(shownGif.name)) },
-                    singleLine = true,
-                    enabled = busy == null,
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            Spacer(Modifier.height(20.dp))
-            SectionTitle(stringResource(if (shownGif == null) R.string.editor_pick else R.string.editor_change))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                FilledTonalButton(
-                    onClick = {
-                        photoPicker.launch(
-                            PickVisualMediaRequest(
-                                ActivityResultContracts.PickVisualMedia.ImageAndVideo // pictures, GIFs, videos
-                            )
-                        )
-                    },
-                    enabled = busy == null,
-                    contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(painterResource(R.drawable.ic_photo_library), null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.editor_gallery))
-                }
-                OutlinedButton(
-                    onClick = { filePicker.launch(arrayOf("image/*", "video/*")) },
-                    enabled = busy == null,
-                    contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(painterResource(R.drawable.ic_folder), null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.editor_files))
-                }
-            }
-
-            Spacer(Modifier.height(24.dp))
-            SectionTitle(stringResource(R.string.editor_display))
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                ScaleMode.entries.forEachIndexed { index, mode ->
-                    SegmentedButton(
-                        // Presets: they snap the zoom. Neither is lit when the zoom is anywhere else.
-                        selected = preset == mode,
-                        onClick = {
-                            if (repositioning) {
-                                // Keep repositioning, just jump to the preset's zoom (Fit is centered).
-                                customZoom = if (mode == ScaleMode.FIT) fitZoom else 1f
-                                if (mode == ScaleMode.FIT) cropCenter = Offset(0.5f, 0.5f)
-                            } else {
-                                scaleMode = mode
-                                customZoom = null
-                            }
-                        },
-                        enabled = busy == null,
-                        shape = SegmentedButtonDefaults.itemShape(index, ScaleMode.entries.size)
-                    ) {
-                        Text(stringResource(if (mode == ScaleMode.FIT) R.string.mode_fit else R.string.mode_fill))
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    stringResource(
-                        when (preset) {
-                            ScaleMode.FIT -> R.string.editor_fit_description
-                            ScaleMode.FILL -> R.string.editor_fill_description
-                            null -> R.string.editor_zoom_description
-                        }
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f)
-                )
-                AnimatedVisibility(visible = !repositioning && preset != ScaleMode.FIT && !centered) {
-                    TextButton(onClick = { cropCenter = Offset(0.5f, 0.5f) }, enabled = busy == null) {
-                        Icon(painterResource(R.drawable.ic_recenter), null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.editor_recenter))
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(24.dp))
-            SectionTitle(stringResource(R.string.editor_shape))
-            ShapePicker(shape, enabled = busy == null) { picked ->
-                // (A custom zoom keeps its number; Fit / Fill presets follow the new shape's box.)
-                val first = shape == null && picked != null && !shapeRepositionShown
-                shape = picked
-                // Picking a shape changes what fits, so show where the shape sits right away (Fill only).
-                if (first && image != null && !repositioning) {
-                    shapeRepositionShown = true
-                    openRepositionSoon = true
-                }
-            }
-
-            // Android 8-11 don't round widget corners, so a Fill picture's corners are square there.
-            // Newer versions never see this switch. A shape replaces it.
-            AnimatedVisibility(
-                visible = WidgetSizes.needsRoundedFrames && (scaleMode == ScaleMode.FILL || customZoom != null) && shape == null
+        // The preview stays pinned at the top (always visible); the settings scroll underneath it.
+        BoxWithConstraints(Modifier.fillMaxSize().padding(innerPadding)) {
+            // At most 40% of the screen's height (and 380dp), so the settings keep room, even in landscape.
+            val previewMaxHeight = min(380.dp, maxHeight * 0.4f)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    // On tablets and in landscape, keep a readable width in the middle.
+                    .wrapContentWidth()
+                    .widthIn(max = 640.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                Box(Modifier.padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 4.dp)) {
+                    Preview(
+                        maxPreviewHeight = previewMaxHeight,
+                        image = image,
+                        background = background,
+                        scaleMode = scaleMode,
+                        shape = drawnShape,
+                        aspectRatio = widgetAspectRatio,
+                        cropCenter = { shownCenter },
+                        zoom = { zoom },
+                        fitZoom = fitZoom,
+                        minZoom = minZoom,
+                        maxZoom = maxZoom,
+                        onZoomChange = { newZoom, newCenter ->
+                            customZoom = newZoom
+                            cropCenter = newCenter
+                        },
+                        repositioning = repositioning,
+                        canReposition = image != null && busy == null,
+                        onStartReposition = { startReposition() },
+                        onEndReposition = { keep -> endReposition(keep) },
+                        // Shows the corners the widget will really have (square on Android 8-11 when switched off).
+                        squareCorners = shape == null && WidgetSizes.needsRoundedFrames &&
+                            (scaleMode == ScaleMode.FILL || customZoom != null) && !roundCorners
+                    )
+                }
+
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp)
+                        .weight(1f)
+                        .verticalScroll(scrollState)
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(stringResource(R.string.editor_round_corners), style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            stringResource(R.string.editor_round_corners_description),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                    Text(
+                        text = when {
+                            shownGif == null -> stringResource(R.string.editor_nothing_picked)
+                            master == null -> shownGif.name
+                            master.frameCount == 1 -> stringResource(
+                                R.string.editor_info_still,
+                                shownGif.name, master.width, master.height,
+                                Formatter.formatShortFileSize(context, shownGif.sizeBytes)
+                            )
+                            else -> pluralStringResource(
+                                R.plurals.editor_info_frames,
+                                master.sourceFrameCount,
+                                shownGif.name, master.sourceFrameCount,
+                                Formatter.formatShortFileSize(context, shownGif.sizeBytes)
+                            )
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    if (shownGif != null) {
+                        Spacer(Modifier.height(16.dp))
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = {
+                                name = it.take(MAX_NAME_LENGTH)
+                                nameEdited = true
+                            },
+                            label = { Text(stringResource(R.string.editor_name)) },
+                            placeholder = { Text(WidgetStore.defaultName(shownGif.name)) },
+                            singleLine = true,
+                            enabled = busy == null,
+                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
-                    Spacer(Modifier.width(12.dp))
-                    Switch(checked = roundCorners, onCheckedChange = { roundCorners = it }, enabled = busy == null)
+
+                    Spacer(Modifier.height(20.dp))
+                    SectionTitle(stringResource(if (shownGif == null) R.string.editor_pick else R.string.editor_change))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                        FilledTonalButton(
+                            onClick = {
+                                photoPicker.launch(
+                                    PickVisualMediaRequest(
+                                        ActivityResultContracts.PickVisualMedia.ImageAndVideo // pictures, GIFs, videos
+                                    )
+                                )
+                            },
+                            enabled = busy == null,
+                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(painterResource(R.drawable.ic_photo_library), null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.editor_gallery))
+                        }
+                        OutlinedButton(
+                            onClick = { filePicker.launch(arrayOf("image/*", "video/*")) },
+                            enabled = busy == null,
+                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(painterResource(R.drawable.ic_folder), null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.editor_files))
+                        }
+                    }
+
+                    Spacer(Modifier.height(24.dp))
+                    SectionTitle(stringResource(R.string.editor_display))
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        ScaleMode.entries.forEachIndexed { index, mode ->
+                            SegmentedButton(
+                                // Presets: they snap the zoom. Neither is lit when the zoom is anywhere else.
+                                selected = preset == mode,
+                                onClick = {
+                                    if (repositioning) {
+                                        // Keep repositioning, just jump to the preset's zoom (Fit is centered).
+                                        customZoom = if (mode == ScaleMode.FIT) fitZoom else 1f
+                                        if (mode == ScaleMode.FIT) cropCenter = Offset(0.5f, 0.5f)
+                                    } else {
+                                        scaleMode = mode
+                                        customZoom = null
+                                    }
+                                },
+                                enabled = busy == null,
+                                shape = SegmentedButtonDefaults.itemShape(index, ScaleMode.entries.size)
+                            ) {
+                                Text(stringResource(if (mode == ScaleMode.FIT) R.string.mode_fit else R.string.mode_fill))
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            stringResource(
+                                when (preset) {
+                                    ScaleMode.FIT -> R.string.editor_fit_description
+                                    ScaleMode.FILL -> R.string.editor_fill_description
+                                    null -> R.string.editor_zoom_description
+                                }
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                        AnimatedVisibility(visible = !repositioning && preset != ScaleMode.FIT && !centered) {
+                            TextButton(onClick = { cropCenter = Offset(0.5f, 0.5f) }, enabled = busy == null) {
+                                Icon(painterResource(R.drawable.ic_recenter), null, Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(stringResource(R.string.editor_recenter))
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(24.dp))
+                    SectionTitle(stringResource(R.string.editor_shape))
+                    ShapePicker(shape, enabled = busy == null) { picked ->
+                        // (A custom zoom keeps its number; Fit / Fill presets follow the new shape's box.)
+                        val first = shape == null && picked != null && !shapeRepositionShown
+                        shape = picked
+                        // Picking a shape changes what fits, so show where the shape sits right away (Fill only).
+                        if (first && image != null && !repositioning) {
+                            shapeRepositionShown = true
+                            openRepositionSoon = true
+                        }
+                    }
+
+                    // Android 8-11 don't round widget corners, so a Fill picture's corners are square there.
+                    // Newer versions never see this switch. A shape replaces it.
+                    AnimatedVisibility(
+                        visible = WidgetSizes.needsRoundedFrames && (scaleMode == ScaleMode.FILL || customZoom != null) && shape == null
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp)
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(stringResource(R.string.editor_round_corners), style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    stringResource(R.string.editor_round_corners_description),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Switch(checked = roundCorners, onCheckedChange = { roundCorners = it }, enabled = busy == null)
+                        }
+                    }
+
+                    // Speed only matters for animations, not still pictures.
+                    if (master != null && master.frameCount > 1) {
+                        Spacer(Modifier.height(24.dp))
+                        SectionTitle(stringResource(R.string.editor_speed))
+                        SpeedPicker(speed, master, fpsCap, enabled = busy == null, onChange = { speed = it })
+                    }
+
+                    Spacer(Modifier.height(24.dp))
+                    SectionTitle(stringResource(R.string.editor_background))
+                    BackgroundPicker(background, enabled = busy == null, onChange = { background = it })
+
+                    error?.let {
+                        Spacer(Modifier.height(16.dp))
+                        Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+                    }
+                    Spacer(Modifier.height(16.dp))
                 }
             }
-
-            // Speed only matters for animations, not still pictures.
-            if (master != null && master.frameCount > 1) {
-                Spacer(Modifier.height(24.dp))
-                SectionTitle(stringResource(R.string.editor_speed))
-                SpeedPicker(speed, master, fpsCap, enabled = busy == null, onChange = { speed = it })
-            }
-
-            Spacer(Modifier.height(24.dp))
-            SectionTitle(stringResource(R.string.editor_background))
-            BackgroundPicker(background, enabled = busy == null, onChange = { background = it })
-
-            error?.let {
-                Spacer(Modifier.height(16.dp))
-                Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
-            }
-            Spacer(Modifier.height(16.dp))
         }
     }
 }
@@ -985,6 +999,7 @@ private fun SectionTitle(text: String) {
  */
 @Composable
 private fun Preview(
+    maxPreviewHeight: androidx.compose.ui.unit.Dp,
     image: ImageBitmap?,
     background: WidgetBackground,
     scaleMode: ScaleMode,
@@ -1005,8 +1020,8 @@ private fun Preview(
     val cornerRadius by animateDpAsState(if (squareCorners) 0.dp else 24.dp, label = "corners")
 
     BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        // As wide as the screen allows, but never taller than 380dp (for tall widgets).
-        val width = min(maxWidth, 380.dp * aspectRatio)
+        // As wide as the screen allows, but never taller than [maxPreviewHeight] (for tall widgets).
+        val width = min(maxWidth, maxPreviewHeight * aspectRatio)
         val height = width / aspectRatio
         val fullWidth = maxWidth
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1021,7 +1036,7 @@ private fun Preview(
                     ZoomView(
                         image, shape?.aspect ?: aspectRatio, shape, background, cropCenter, zoom,
                         fitZoom, minZoom, maxZoom, onZoomChange,
-                        Modifier.size(fullWidth, max(height, 260.dp))
+                        Modifier.size(fullWidth, max(height, maxPreviewHeight))
                     )
                 } else {
                     val widgetShape = RoundedCornerShape(cornerRadius)
