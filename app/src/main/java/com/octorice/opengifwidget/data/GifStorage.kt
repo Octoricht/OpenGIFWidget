@@ -39,6 +39,10 @@ object GifStorage {
     fun frameFile(context: Context, appWidgetId: Int, version: Long, index: Int): File =
         File(framesDir(context, appWidgetId, version), FrameFiles.frameFileName(index))
 
+    /** The shape mask saved next to a set of shaped widget frames. */
+    fun maskFile(context: Context, appWidgetId: Int, version: Long): File =
+        File(framesDir(context, appWidgetId, version), FrameFiles.MASK_FILE_NAME)
+
     /** A picked file waiting to be decoded. Deleted right after. */
     fun importCopyFile(context: Context, appWidgetId: Int): File =
         File(context.cacheDir, "import-$appWidgetId")

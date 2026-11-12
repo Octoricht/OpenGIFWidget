@@ -80,12 +80,16 @@ object UsageHealth {
             }
     }
 
-    /** Launcher memory and flips per second of one widget, with this speed and FPS cap. */
+    /**
+     * Launcher memory and flips per second of one widget, with this speed and FPS cap.
+     * A shaped widget also shows its mask as the background layer: one more frame.
+     */
     fun widgetCost(frames: FrameSet, speed: Float, fpsCap: Int): Pair<Long, Float> {
         val frameBytes = frames.width.toLong() * frames.height * 4
-        if (frames.frameCount <= 1) return frameBytes to 0f // a still picture doesn't flip
+        val maskBytes = if (frames.masked) frameBytes else 0L
+        if (frames.frameCount <= 1) return frameBytes + maskBytes to 0f // a still picture doesn't flip
         val plan = Playback.plan(frames.frameCount, frames.intervalMs, speed, fpsCap)
-        return plan.frames.size * frameBytes to 1000f / plan.intervalMs
+        return plan.frames.size * frameBytes + maskBytes to 1000f / plan.intervalMs
     }
 
     fun evaluate(context: Context, widgets: List<WidgetSummary>): Health {

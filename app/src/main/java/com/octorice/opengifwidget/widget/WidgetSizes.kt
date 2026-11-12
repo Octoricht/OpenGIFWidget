@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.os.Build
 import com.octorice.opengifwidget.R
+import com.octorice.opengifwidget.shape.WidgetShape
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -67,5 +68,36 @@ object WidgetSizes {
         val maxHeightDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
         if (maxWidthDp <= 0 && maxHeightDp <= 0) return null
         return (max(maxWidthDp, maxHeightDp) * context.resources.displayMetrics.density).roundToInt()
+    }
+
+    /**
+     * [shape] as drawn on this widget at its current size (see WidgetShape.forSize), or the shape
+     * itself while the size isn't known yet. Null stays null (no shape).
+     */
+    fun shapeFor(context: Context, appWidgetId: Int, shape: WidgetShape?): WidgetShape? {
+        if (shape == null) return null
+        val (width, height) = currentSizeDp(context, appWidgetId) ?: return shape.base
+        return shape.base.forSize(width.toFloat(), height.toFloat())
+    }
+
+    /**
+     * With a shape: the longest side, in pixels, of the shape's box (the biggest box with the
+     * shape's [aspect] that fits the widget), the biggest it gets in portrait or landscape.
+     * A circle in a 4x2 widget is only as big as the widget is tall. Null if the size is unknown yet.
+     */
+    fun shapeMaxSidePx(context: Context, appWidgetId: Int, aspect: Float): Int? {
+        val options = AppWidgetManager.getInstance(context).getAppWidgetOptions(appWidgetId)
+        val minW = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
+        val maxW = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
+        val minH = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+        val maxH = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
+        if (maxW <= 0 || maxH <= 0) return null
+        // Portrait: min width x max height. Landscape: max width x min height.
+        fun boxSide(width: Int, height: Int): Float {
+            val boxWidth = minOf(width.toFloat(), height * aspect)
+            return max(boxWidth, boxWidth / aspect)
+        }
+        val sideDp = max(boxSide(minW.coerceAtLeast(1), maxH), boxSide(maxW, minH.coerceAtLeast(1)))
+        return (sideDp * context.resources.displayMetrics.density).roundToInt()
     }
 }

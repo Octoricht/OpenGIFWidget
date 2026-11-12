@@ -13,6 +13,9 @@ import kotlin.math.max
 /** Reading and writing single frame files (lossy WebP with transparency). */
 object FrameFiles {
 
+    /** A shape's mask, saved next to the widget frames it cut (see ShapeMask). */
+    const val MASK_FILE_NAME = "mask.webp"
+
     fun frameFileName(index: Int): String = String.format(Locale.ROOT, "frame_%03d.webp", index)
 
     /** Lossy WebP keeps transparency and is several times smaller than PNG. */

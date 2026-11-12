@@ -73,6 +73,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -103,6 +104,19 @@ import com.octorice.opengifwidget.data.ImportException
 import com.octorice.opengifwidget.data.WidgetBackground
 import com.octorice.opengifwidget.data.friendlyErrors
 import com.octorice.opengifwidget.ui.BackgroundPicker
+import com.octorice.opengifwidget.ui.ShapePicker
+import com.octorice.opengifwidget.gif.Zoom
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.max
+import kotlin.math.exp
+import kotlin.math.ln
+import com.octorice.opengifwidget.ui.ShapedBox
+import com.octorice.opengifwidget.shape.WidgetShape
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.asComposePath
 import com.octorice.opengifwidget.ui.friendlyMessage
 import com.octorice.opengifwidget.ui.toComposeColor
 import com.octorice.opengifwidget.data.ScaleMode
@@ -193,6 +207,8 @@ class GifConfigActivity : ComponentActivity() {
                 scaleMode = WidgetStore.getScaleMode(this, appWidgetId),
                 cropCenter = Offset(cropX, cropY),
                 roundCorners = WidgetStore.getRoundCorners(this, appWidgetId),
+                shape = WidgetStore.getShape(this, appWidgetId),
+                zoom = WidgetStore.getZoom(this, appWidgetId),
                 background = WidgetStore.getBackground(this, appWidgetId),
                 speed = WidgetStore.getSpeed(this, appWidgetId)
             )
@@ -206,6 +222,8 @@ class GifConfigActivity : ComponentActivity() {
                     onHomeScreen = onHomeScreen,
                     widgetAspectRatio = WidgetSizes.aspectRatio(this, appWidgetId),
                     fpsCap = AppSettings.getFpsCap(this),
+                    outputSidePx = ::outputSidePx,
+                    shapeForWidget = { shape -> WidgetSizes.shapeFor(this, appWidgetId, shape) },
                     framesDir = { version -> GifStorage.framesDir(this, appWidgetId, version) },
                     prepare = ::prepare,
                     openVideo = ::openVideo,
@@ -347,16 +365,18 @@ class GifConfigActivity : ComponentActivity() {
             // Remembered so a rejected save (below) leaves everything as it was.
             val oldFit = WidgetStore.getFramesFit(context, appWidgetId)
             val oldRounded = WidgetStore.getFramesRounded(context, appWidgetId)
+            val oldShapeId = WidgetStore.getFramesShapeId(context, appWidgetId)
+            val oldZoom = WidgetStore.getFramesZoom(context, appWidgetId)
             // Sized and shaped for the widget as it is on the home screen right now.
             val made = WidgetFrames.make(
                 context, appWidgetId, master, settings.scaleMode,
-                settings.cropCenter.x to settings.cropCenter.y, settings.roundCorners, onProgress
+                settings.cropCenter.x to settings.cropCenter.y, settings.roundCorners, settings.shape, settings.zoom, onProgress
             )
             try {
                 checkMemoryLimit(context, made, settings.speed)
             } catch (e: ImportException) {
                 GifStorage.framesDir(context, appWidgetId, made.version).deleteRecursively()
-                WidgetStore.saveFramesFit(context, appWidgetId, oldFit.first, oldFit.second, oldRounded)
+                WidgetStore.saveFramesFit(context, appWidgetId, oldFit.first, oldFit.second, oldRounded, oldShapeId, oldZoom)
                 throw e
             }
             frames = made
@@ -368,6 +388,8 @@ class GifConfigActivity : ComponentActivity() {
         WidgetStore.saveScaleMode(context, appWidgetId, settings.scaleMode)
         WidgetStore.saveCropCenter(context, appWidgetId, settings.cropCenter.x, settings.cropCenter.y)
         WidgetStore.saveRoundCorners(context, appWidgetId, settings.roundCorners)
+        WidgetStore.saveShape(context, appWidgetId, settings.shape)
+        WidgetStore.saveZoom(context, appWidgetId, settings.zoom)
         WidgetStore.saveBackground(context, appWidgetId, settings.background)
         WidgetStore.saveSpeed(context, appWidgetId, settings.speed)
         // An empty name falls back to the file's name.
@@ -399,6 +421,26 @@ class GifConfigActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * About how big (longest side, px) this widget's frames will really be, for the zoom-in limit:
+     * the widget's (or shape box's) size on screen, at most the phone's frame size limit, and
+     * smaller again when there are many frames (the RAM budget shares its pixels between them,
+     * the same way deriveWidgetFrames does).
+     */
+    private fun outputSidePx(shape: WidgetShape?, frameCount: Int, boxAspect: Float): Int {
+        val limits = FrameLimits.forDevice(this)
+        val limit = if (frameCount == 1) limits.stillMaxSidePx else limits.animationMaxSidePx
+        val widget = if (shape != null) {
+            WidgetSizes.shapeMaxSidePx(this, appWidgetId, shape.aspect)
+        } else {
+            WidgetSizes.maxSidePx(this, appWidgetId)
+        }
+        val layers = frameCount + (if (shape != null) 1 else 0) // a shape's background counts as a frame
+        val shortToLong = kotlin.math.min(boxAspect, 1f / boxAspect)
+        val budget = kotlin.math.sqrt(limits.maxTotalPixels / layers.coerceAtLeast(1).toDouble() / shortToLong).toInt()
+        return minOf(if (widget != null && widget > 0) minOf(limit, widget) else limit, budget)
+    }
+
     private fun finishWithSuccess() {
         savedSuccessfully = true
         setResult(RESULT_OK, resultIntent())
@@ -415,6 +457,8 @@ private data class EditorSettings(
     val scaleMode: ScaleMode,
     val cropCenter: Offset,
     val roundCorners: Boolean, // Android 8-11 only: cut rounded corners into Fill pictures
+    val shape: WidgetShape?,   // cookie-cutter shape, null = none
+    val zoom: Float?,          // custom zoom (1 = Fill), null = the Fit / Fill preset in scaleMode
     val background: WidgetBackground,
     val speed: Float
 )
@@ -444,6 +488,8 @@ private fun EditorScreen(
     onHomeScreen: Boolean,
     widgetAspectRatio: Float,
     fpsCap: Int,
+    outputSidePx: (shape: WidgetShape?, frameCount: Int, boxAspect: Float) -> Int,
+    shapeForWidget: (WidgetShape?) -> WidgetShape?,
     framesDir: (version: Long) -> File,
     prepare: suspend (Uri, (Int, Int) -> Unit) -> StoredGif,
     openVideo: suspend (Uri) -> OpenedVideo,
@@ -460,9 +506,18 @@ private fun EditorScreen(
     var scaleMode by remember { mutableStateOf(saved.settings.scaleMode) }
     var cropCenter by remember { mutableStateOf(saved.settings.cropCenter) }
     var roundCorners by remember { mutableStateOf(saved.settings.roundCorners) }
+    var shape by remember { mutableStateOf(saved.settings.shape) }
+    // The first time you pick a shape here, Reposition opens by itself (only once per visit).
+    var shapeRepositionShown by remember { mutableStateOf(false) }
+    // Opens Reposition on the next frame, once the preview knows the new shape's box.
+    var openRepositionSoon by remember { mutableStateOf(false) }
     // Fill: the picture is locked until you tap "Reposition" (no accidental moves). Cancel goes back here.
     var repositioning by remember { mutableStateOf(false) }
     var cropBeforeReposition by remember { mutableStateOf(cropCenter) }
+    // Your own zoom (1 = Fill), or null while a Fit / Fill preset is used. Cancel goes back to these.
+    var customZoom by remember { mutableStateOf(saved.settings.zoom) }
+    var zoomBeforeReposition by remember { mutableStateOf(customZoom) }
+    var modeBeforeReposition by remember { mutableStateOf(scaleMode) }
     var background by remember { mutableStateOf(saved.settings.background) }
     var name by remember { mutableStateOf(saved.settings.name) }
     var speed by remember { mutableFloatStateOf(saved.settings.speed) }
@@ -483,14 +538,43 @@ private fun EditorScreen(
     val master = shownGif?.master
     val image = rememberFramePlayer(master?.let { framesDir(it.version) }, master, maxSidePx = 1080, speed, fpsCap)
 
+    // Zoom: the box is the shape's box, or the whole widget without a shape. Fit and Fill are two
+    // points on the same scale (Fill = 1), so the preview always uses the zoom math (Zoom.box).
+    // The picked shape as drawn at this widget's size (Dots: as many dots as fit). Previews,
+    // Reposition and the zoom limits use this one; the picked shape is what gets saved.
+    val drawnShape = shapeForWidget(shape)
+    val boxAspect = drawnShape?.aspect ?: widgetAspectRatio
+    val fitZoom = master?.let { Zoom.fitZoom(it.width.toFloat(), it.height.toFloat(), boxAspect) } ?: 1f
+    val minZoom = fitZoom * Zoom.MIN_OF_FIT
+    val maxZoom = master?.let {
+        Zoom.maxZoom(it.width.toFloat(), it.height.toFloat(), boxAspect, outputSidePx(drawnShape, it.frameCount, boxAspect))
+    } ?: 1f
+    val zoom = customZoom ?: if (scaleMode == ScaleMode.FIT) fitZoom else 1f
+    // A Fit preset is always centered (as before zoom existed).
+    val shownCenter = if (customZoom == null && scaleMode == ScaleMode.FIT) Offset(0.5f, 0.5f) else cropCenter
+    val centered = kotlin.math.abs(shownCenter.x - 0.5f) < 0.002f && kotlin.math.abs(shownCenter.y - 0.5f) < 0.002f
+    // Which preset button is lit: none when the zoom is anywhere else.
+    val preset = when {
+        customZoom == null -> scaleMode
+        customZoom == 1f -> ScaleMode.FILL
+        customZoom == fitZoom && centered -> ScaleMode.FIT
+        else -> null
+    }
+
     // Frames only need remaking for a new picture, Fit/Fill or the crop; not for the background.
-    val remakeFrames = picked != null ||
+    // These are functions (not values worked out while drawing), so the Save button always gets the
+    // live answer: it once kept an old "nothing changed" and closed without saving a new zoom.
+    fun remakeFrames() = picked != null ||
         saved.gif?.frames == null ||
-        scaleMode != saved.settings.scaleMode ||
-        (scaleMode == ScaleMode.FILL && cropCenter != saved.settings.cropCenter) ||
-        WidgetFrames.cutsCorners(scaleMode, roundCorners) != WidgetFrames.cutsCorners(scaleMode, saved.settings.roundCorners)
+        customZoom != saved.settings.zoom ||
+        (customZoom == null && scaleMode != saved.settings.scaleMode) ||
+        ((scaleMode == ScaleMode.FILL || customZoom != null) && cropCenter != saved.settings.cropCenter) ||
+        shape != saved.settings.shape ||
+        (shape == null && WidgetFrames.cutsCorners(scaleMode, roundCorners, customZoom) !=
+            (saved.settings.shape == null &&
+                WidgetFrames.cutsCorners(saved.settings.scaleMode, saved.settings.roundCorners, saved.settings.zoom)))
     // Speed, name and background are just settings: saving them doesn't remake frames.
-    val hasChanges = remakeFrames ||
+    fun hasChanges() = remakeFrames() ||
         background != saved.settings.background ||
         name != saved.settings.name ||
         speed != saved.settings.speed
@@ -499,9 +583,43 @@ private fun EditorScreen(
     // Back cancels instead (like the Cancel button).
     BackHandler(enabled = busy != null) { videoJob?.cancel() }
 
+    // Buttons can hold on to an older copy of these two functions, so they never use values worked out
+    // while drawing the screen (those can be old): they read the live state, plus the newest fitZoom.
+    val latestFitZoom by rememberUpdatedState(fitZoom)
+
+    fun startReposition() {
+        val fit = latestFitZoom
+        val usesFitPreset = customZoom == null && scaleMode == ScaleMode.FIT
+        cropBeforeReposition = cropCenter
+        zoomBeforeReposition = customZoom
+        modeBeforeReposition = scaleMode
+        // While repositioning the zoom is always a number; Done turns it back into a preset if it is one.
+        if (usesFitPreset) cropCenter = Offset(0.5f, 0.5f) // a Fit preset is always centered
+        customZoom = customZoom ?: if (usesFitPreset) fit else 1f
+        repositioning = true
+    }
+
     fun endReposition(keep: Boolean) {
-        if (!keep) cropCenter = cropBeforeReposition
+        if (keep) {
+            val fit = latestFitZoom
+            val isCentered = kotlin.math.abs(cropCenter.x - 0.5f) < 0.002f && kotlin.math.abs(cropCenter.y - 0.5f) < 0.002f
+            when {
+                customZoom == 1f -> { scaleMode = ScaleMode.FILL; customZoom = null }
+                customZoom == fit && isCentered -> { scaleMode = ScaleMode.FIT; customZoom = null }
+                else -> Unit // your own zoom: kept as a number
+            }
+        } else {
+            cropCenter = cropBeforeReposition
+            customZoom = zoomBeforeReposition
+            scaleMode = modeBeforeReposition
+        }
         repositioning = false
+    }
+    LaunchedEffect(openRepositionSoon) {
+        if (openRepositionSoon) {
+            openRepositionSoon = false
+            startReposition()
+        }
     }
     // Back while repositioning = Cancel.
     BackHandler(enabled = repositioning && busy == null) { endReposition(keep = false) }
@@ -511,6 +629,7 @@ private fun EditorScreen(
         picked = newGif
         repositioning = false
         cropCenter = Offset(0.5f, 0.5f)
+        customZoom = null // a new picture starts from the Fit / Fill preset
         if (!nameEdited) name = WidgetStore.defaultName(newGif.name)
     }
 
@@ -568,8 +687,8 @@ private fun EditorScreen(
     }
 
     fun onSave() {
-        val gif = shownGif ?: return
-        if (!hasChanges) {
+        val gif = picked ?: saved.gif ?: return
+        if (!hasChanges()) {
             onSaved()
             return
         }
@@ -577,8 +696,8 @@ private fun EditorScreen(
             busy = Busy.Saving(0, 0)
             error = null
             try {
-                val settings = EditorSettings(name, scaleMode, cropCenter, roundCorners, background, speed)
-                save(gif, settings, remakeFrames, widgetAspectRatio) { done, total ->
+                val settings = EditorSettings(name, scaleMode, cropCenter, roundCorners, shape, customZoom, background, speed)
+                save(gif, settings, remakeFrames(), widgetAspectRatio) { done, total ->
                     busy = Busy.Saving(done, total)
                 }
                 onSaved()
@@ -632,7 +751,7 @@ private fun EditorScreen(
                 enabled = master != null && busy == null && !repositioning,
                 // "Add to home screen" only while adding a widget; once it's placed, it's "Save".
                 label = stringResource(if (saved.gif == null && !onHomeScreen) R.string.editor_add else R.string.editor_save),
-                onSave = ::onSave,
+                onSave = { onSave() },
                 onCancel = { videoJob?.cancel() }
             )
         }
@@ -652,18 +771,24 @@ private fun EditorScreen(
                 image = image,
                 background = background,
                 scaleMode = scaleMode,
+                shape = drawnShape,
                 aspectRatio = widgetAspectRatio,
-                cropCenter = { cropCenter },
-                onCropCenterChange = { cropCenter = it },
-                repositioning = repositioning,
-                canReposition = image != null && scaleMode == ScaleMode.FILL && busy == null,
-                onStartReposition = {
-                    cropBeforeReposition = cropCenter
-                    repositioning = true
+                cropCenter = { shownCenter },
+                zoom = { zoom },
+                fitZoom = fitZoom,
+                minZoom = minZoom,
+                maxZoom = maxZoom,
+                onZoomChange = { newZoom, newCenter ->
+                    customZoom = newZoom
+                    cropCenter = newCenter
                 },
-                onEndReposition = ::endReposition,
+                repositioning = repositioning,
+                canReposition = image != null && busy == null,
+                onStartReposition = { startReposition() },
+                onEndReposition = { keep -> endReposition(keep) },
                 // Shows the corners the widget will really have (square on Android 8-11 when switched off).
-                squareCorners = WidgetSizes.needsRoundedFrames && scaleMode == ScaleMode.FILL && !roundCorners
+                squareCorners = shape == null && WidgetSizes.needsRoundedFrames &&
+                    (scaleMode == ScaleMode.FILL || customZoom != null) && !roundCorners
             )
 
             Spacer(Modifier.height(12.dp))
@@ -743,10 +868,17 @@ private fun EditorScreen(
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 ScaleMode.entries.forEachIndexed { index, mode ->
                     SegmentedButton(
-                        selected = scaleMode == mode,
+                        // Presets: they snap the zoom. Neither is lit when the zoom is anywhere else.
+                        selected = preset == mode,
                         onClick = {
-                            scaleMode = mode
-                            if (mode == ScaleMode.FIT) repositioning = false
+                            if (repositioning) {
+                                // Keep repositioning, just jump to the preset's zoom (Fit is centered).
+                                customZoom = if (mode == ScaleMode.FIT) fitZoom else 1f
+                                if (mode == ScaleMode.FIT) cropCenter = Offset(0.5f, 0.5f)
+                            } else {
+                                scaleMode = mode
+                                customZoom = null
+                            }
                         },
                         enabled = busy == null,
                         shape = SegmentedButtonDefaults.itemShape(index, ScaleMode.entries.size)
@@ -759,13 +891,17 @@ private fun EditorScreen(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text(
                     stringResource(
-                        if (scaleMode == ScaleMode.FIT) R.string.editor_fit_description else R.string.editor_fill_description
+                        when (preset) {
+                            ScaleMode.FIT -> R.string.editor_fit_description
+                            ScaleMode.FILL -> R.string.editor_fill_description
+                            null -> R.string.editor_zoom_description
+                        }
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f)
                 )
-                AnimatedVisibility(visible = scaleMode == ScaleMode.FILL && cropCenter != Offset(0.5f, 0.5f)) {
+                AnimatedVisibility(visible = !repositioning && preset != ScaleMode.FIT && !centered) {
                     TextButton(onClick = { cropCenter = Offset(0.5f, 0.5f) }, enabled = busy == null) {
                         Icon(painterResource(R.drawable.ic_recenter), null, Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
@@ -774,9 +910,24 @@ private fun EditorScreen(
                 }
             }
 
+            Spacer(Modifier.height(24.dp))
+            SectionTitle(stringResource(R.string.editor_shape))
+            ShapePicker(shape, enabled = busy == null) { picked ->
+                // (A custom zoom keeps its number; Fit / Fill presets follow the new shape's box.)
+                val first = shape == null && picked != null && !shapeRepositionShown
+                shape = picked
+                // Picking a shape changes what fits, so show where the shape sits right away (Fill only).
+                if (first && image != null && !repositioning) {
+                    shapeRepositionShown = true
+                    openRepositionSoon = true
+                }
+            }
+
             // Android 8-11 don't round widget corners, so a Fill picture's corners are square there.
-            // Newer versions never see this switch.
-            AnimatedVisibility(visible = WidgetSizes.needsRoundedFrames && scaleMode == ScaleMode.FILL) {
+            // Newer versions never see this switch. A shape replaces it.
+            AnimatedVisibility(
+                visible = WidgetSizes.needsRoundedFrames && (scaleMode == ScaleMode.FILL || customZoom != null) && shape == null
+            ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -829,17 +980,22 @@ private fun SectionTitle(text: String) {
 }
 
 /**
- * The widget-shaped preview. In Fill mode the picture is locked, so a stray swipe can't move it:
- * the "Reposition" button switches to [CropView], where you choose what stays in view.
+ * The widget-shaped preview. The picture is locked, so a stray swipe can't move it:
+ * the "Reposition" button switches to [ZoomView], where you zoom and move it.
  */
 @Composable
 private fun Preview(
     image: ImageBitmap?,
     background: WidgetBackground,
     scaleMode: ScaleMode,
+    shape: WidgetShape?,
     aspectRatio: Float,
     cropCenter: () -> Offset,
-    onCropCenterChange: (Offset) -> Unit,
+    zoom: () -> Float,
+    fitZoom: Float,
+    minZoom: Float,
+    maxZoom: Float,
+    onZoomChange: (Float, Offset) -> Unit,
     squareCorners: Boolean,
     repositioning: Boolean,
     canReposition: Boolean,
@@ -860,38 +1016,59 @@ private fun Preview(
                 label = "reposition"
             ) { cropping ->
                 if (cropping && image != null) {
-                    // Same height as the preview, but the full width: room to show the whole picture.
-                    CropView(image, aspectRatio, cropCenter, onCropCenterChange, Modifier.size(fullWidth, height))
+                    // The full width (room around the window to see the rest of the picture), at least 260dp tall.
+                    // With a shape, the window has the shape's box shape (e.g. square), with the shape drawn in it.
+                    ZoomView(
+                        image, shape?.aspect ?: aspectRatio, shape, background, cropCenter, zoom,
+                        fitZoom, minZoom, maxZoom, onZoomChange,
+                        Modifier.size(fullWidth, max(height, 260.dp))
+                    )
                 } else {
+                    val widgetShape = RoundedCornerShape(cornerRadius)
                     Box(
                         modifier = Modifier
                             .width(width)
                             .aspectRatio(aspectRatio)
-                            .clip(RoundedCornerShape(cornerRadius))
-                            .background(background.toComposeColor())
+                            .clip(widgetShape)
+                            .then(
+                                // With a shape, the background takes the shape (drawn by ShapedBox);
+                                // a thin outline shows where the widget's edges are.
+                                if (shape == null) {
+                                    Modifier.background(background.toComposeColor())
+                                } else {
+                                    Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, widgetShape)
+                                }
+                            )
                     ) {
-                        // Fades in when the first frame is ready; frames then simply replace each other.
-                        AnimatedContent(
-                            targetState = image != null,
-                            transitionSpec = { fadeIn() togetherWith fadeOut() },
-                            label = "preview"
-                        ) { hasImage ->
-                            if (hasImage && image != null) {
-                                FrameImage(image, scaleMode, cropCenter, Modifier.fillMaxSize())
-                            } else {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center,
-                                    modifier = Modifier.fillMaxSize()
-                                ) {
-                                    Image(painterResource(R.drawable.widget_placeholder), null, Modifier.size(56.dp))
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(stringResource(R.string.editor_preview_empty), color = Color.White.copy(alpha = 0.7f))
+                        val picture: @Composable () -> Unit = {
+                            // Fades in when the first frame is ready; frames then simply replace each other.
+                            AnimatedContent(
+                                targetState = image != null,
+                                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                                label = "preview"
+                            ) { hasImage ->
+                                if (hasImage && image != null) {
+                                    FrameImage(image, scaleMode, cropCenter, Modifier.fillMaxSize(), zoom = zoom)
+                                } else {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center,
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        Image(painterResource(R.drawable.widget_placeholder), null, Modifier.size(56.dp))
+                                        Spacer(Modifier.height(8.dp))
+                                        Text(stringResource(R.string.editor_preview_empty), color = Color.White.copy(alpha = 0.7f))
+                                    }
                                 }
                             }
                         }
+                        if (shape == null) {
+                            picture()
+                        } else {
+                            ShapedBox(shape, background, Modifier.fillMaxSize()) { picture() }
+                        }
 
-                        // Fill mode: the button that unlocks moving the picture.
+                        // The button that unlocks zooming and moving the picture.
                         androidx.compose.animation.AnimatedVisibility(
                             visible = canReposition,
                             enter = fadeIn(),
@@ -917,11 +1094,21 @@ private fun Preview(
                 }
             }
 
-            // While repositioning: keep the new spot, or go back to where it was.
+            // While repositioning: a zoom slider (one-hand use), then keep the new spot or go back.
             AnimatedVisibility(visible = repositioning && image != null) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    stringResource(R.string.editor_reposition_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                if (image != null) {
+                    ZoomSlider(zoom, fitZoom, minZoom, maxZoom, cropCenter, image, shape?.aspect ?: aspectRatio, onZoomChange)
+                }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.padding(top = 12.dp)
+                    modifier = Modifier.padding(top = 4.dp)
                 ) {
                     OutlinedButton(onClick = { onEndReposition(false) }) {
                         Text(stringResource(R.string.editor_reposition_cancel))
@@ -930,75 +1117,118 @@ private fun Preview(
                         Text(stringResource(R.string.editor_reposition_done))
                     }
                 }
+                }
             }
         }
     }
 }
 
+/** The widget-shaped window in the middle of the zoom view (24dp margin all round). */
+private fun zoomWindow(viewWidth: Float, viewHeight: Float, aspect: Float, margin: Float): Rect {
+    val width = kotlin.math.min(viewWidth - 2 * margin, (viewHeight - 2 * margin) * aspect)
+    val height = width / aspect
+    val left = (viewWidth - width) / 2
+    val top = (viewHeight - height) / 2
+    return Rect(left, top, left + width, top + height)
+}
+
+/** Clamps a zoom, snaps it onto Fit / Fill, and gives a small tick when it lands on one. */
+private class ZoomSnapper(val haptics: androidx.compose.ui.hapticfeedback.HapticFeedback) {
+    fun apply(raw: Float, old: Float, fit: Float, min: Float, max: Float): Float {
+        val snapped = Zoom.snap(raw.coerceIn(min, max), fit).coerceIn(min, max)
+        if (snapped != old && (snapped == 1f || snapped == fit)) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        return snapped
+    }
+}
+
+/** The new zoom's center: [center] slid so the box stays where it's allowed to be (see Zoom.box). */
+private fun clampedCenter(image: ImageBitmap, aspect: Float, zoom: Float, center: Offset): Offset {
+    val box = Zoom.box(image.width.toFloat(), image.height.toFloat(), aspect, zoom, center.x, center.y)
+    val (x, y) = Zoom.centerOf(box, image.width.toFloat(), image.height.toFloat())
+    return Offset(x, y)
+}
+
 /**
- * Choosing what a Fill widget shows: the whole picture, with a widget-shaped window over it.
- * Everything outside the window is dimmed (that's what the widget won't show). Drag to move the window.
+ * Reposition: a widget-shaped window stays still, and the picture moves under it. Pinch to zoom,
+ * drag to move. Outside the window (or the shape) is dimmed: that's what the widget won't show.
+ * Empty space inside the window shows the background, like the widget.
  */
 @Composable
-private fun CropView(
+private fun ZoomView(
     image: ImageBitmap,
     aspectRatio: Float,
+    shape: WidgetShape?,
+    background: WidgetBackground,
     cropCenter: () -> Offset,
-    onCropCenterChange: (Offset) -> Unit,
+    zoom: () -> Float,
+    fitZoom: Float,
+    minZoom: Float,
+    maxZoom: Float,
+    onZoomChange: (Float, Offset) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var boxSize by remember { mutableStateOf(IntSize.Zero) }
-    // Where the whole picture sits in this view (fitted, centered) and how much it's scaled.
-    fun pictureScale() = kotlin.math.min(boxSize.width / image.width.toFloat(), boxSize.height / image.height.toFloat())
+    val snapper = ZoomSnapper(LocalHapticFeedback.current)
+    // The gesture below keeps running while the GIF plays (it only restarts if the picture's size or
+    // the zoom range changes), so it reads the newest values through these.
+    val latestCenter by rememberUpdatedState(cropCenter)
+    val latestZoom by rememberUpdatedState(zoom)
+    val latestOnChange by rememberUpdatedState(onZoomChange)
+    // The pinch's own zoom, before snapping, so snapping onto Fit / Fill doesn't hold your fingers there.
+    var rawZoom by remember { mutableFloatStateOf(zoom()) }
+    val bgColor = background.toComposeColor()
 
     Canvas(
         modifier
-            .onSizeChanged { boxSize = it }
-            .pointerInput(image.width, image.height, aspectRatio) {
-                detectDragGestures { change, amount ->
-                    change.consume()
-                    // The same window FrameExtractor will cut, so the drag limits match the real crop.
-                    val window = FrameExtractor.cropRect(image.width, image.height, Crop(0.5f, 0.5f, aspectRatio))
-                    val halfX = window.width() / 2f / image.width
-                    val halfY = window.height() / 2f / image.height
-                    val scale = pictureScale()
-                    val current = cropCenter()
-                    // Moving your finger right moves the window right.
-                    onCropCenterChange(
-                        Offset(
-                            (current.x + amount.x / (image.width * scale)).coerceIn(halfX, 1f - halfX),
-                            (current.y + amount.y / (image.height * scale)).coerceIn(halfY, 1f - halfY)
-                        )
-                    )
+            .clipToBounds()
+            .pointerInput(image.width, image.height, aspectRatio, fitZoom, minZoom, maxZoom) {
+                detectTransformGestures { _, pan, gestureZoom, _ ->
+                    val oldZoom = latestZoom()
+                    // The zoom was changed elsewhere (slider, Fit / Fill buttons): continue from there.
+                    if (Zoom.snap(rawZoom.coerceIn(minZoom, maxZoom), fitZoom).coerceIn(minZoom, maxZoom) != oldZoom) rawZoom = oldZoom
+                    rawZoom = (rawZoom * gestureZoom).coerceIn(minZoom, maxZoom)
+                    val newZoom = snapper.apply(rawZoom, oldZoom, fitZoom, minZoom, maxZoom)
+                    // The picture follows your finger: moving right shows more of the left side.
+                    val window = zoomWindow(size.width.toFloat(), size.height.toFloat(), aspectRatio, 24.dp.toPx())
+                    val c = latestCenter()
+                    val box = Zoom.box(image.width.toFloat(), image.height.toFloat(), aspectRatio, newZoom, c.x, c.y)
+                    val k = window.width / box.width() // screen pixels per picture pixel
+                    val moved = Offset(c.x - pan.x / k / image.width, c.y - pan.y / k / image.height)
+                    latestOnChange(newZoom, clampedCenter(image, aspectRatio, newZoom, moved))
                 }
             }
     ) {
-        val scale = kotlin.math.min(size.width / image.width, size.height / image.height)
-        val shownWidth = image.width * scale
-        val shownHeight = image.height * scale
-        val left = (size.width - shownWidth) / 2
-        val top = (size.height - shownHeight) / 2
+        val window = zoomWindow(size.width, size.height, aspectRatio, 24.dp.toPx())
+        val c = cropCenter()
+        val box = Zoom.box(image.width.toFloat(), image.height.toFloat(), aspectRatio, zoom(), c.x, c.y)
+        val k = window.width / box.width()
+
+        val corner = CornerRadius(12.dp.toPx())
+        // What stays visible: the window, or with a shape, the shape inside the window.
+        val kept = if (shape != null) {
+            shape.path(window.width, window.height).asComposePath().apply { translate(window.topLeft) }
+        } else {
+            Path().apply { addRoundRect(RoundRect(window, corner)) }
+        }
+        // The background first (seen where the picture doesn't reach), then the picture.
+        drawPath(kept, bgColor)
         drawImage(
             image = image,
-            dstOffset = IntOffset(left.roundToInt(), top.roundToInt()),
-            dstSize = IntSize(shownWidth.roundToInt(), shownHeight.roundToInt()),
+            dstOffset = IntOffset((window.left - box.left * k).roundToInt(), (window.top - box.top * k).roundToInt()),
+            dstSize = IntSize((image.width * k).roundToInt(), (image.height * k).roundToInt()),
             filterQuality = FilterQuality.Medium
         )
-
-        val center = cropCenter()
-        val crop = FrameExtractor.cropRect(image.width, image.height, Crop(center.x, center.y, aspectRatio))
-        val window = Rect(
-            left + crop.left * scale, top + crop.top * scale,
-            left + crop.right * scale, top + crop.bottom * scale
-        )
-        val corner = CornerRadius(12.dp.toPx())
-        // Dim everything outside the window.
+        // Dim everything outside the window / shape.
         val outside = Path().apply {
-            addRect(Rect(left, top, left + shownWidth, top + shownHeight))
-            op(this, Path().apply { addRoundRect(RoundRect(window, corner)) }, PathOperation.Difference)
+            addRect(Rect(0f, 0f, size.width, size.height))
+            op(this, kept, PathOperation.Difference)
         }
         drawPath(outside, Color.Black.copy(alpha = 0.6f))
-        drawRoundRect(Color.White, window.topLeft, window.size, corner, style = Stroke(2.dp.toPx()))
+        if (shape != null) {
+            drawRect(Color.White.copy(alpha = 0.5f), window.topLeft, window.size, style = Stroke(1.dp.toPx()))
+            drawPath(kept, Color.White, style = Stroke(2.dp.toPx()))
+        } else {
+            drawRoundRect(Color.White, window.topLeft, window.size, corner, style = Stroke(2.dp.toPx()))
+        }
         // Rule-of-thirds grid inside the window, like a photo crop tool.
         val gridColor = Color.White.copy(alpha = 0.5f)
         for (i in 1..2) {
@@ -1007,6 +1237,53 @@ private fun CropView(
             drawLine(gridColor, Offset(x, window.top), Offset(x, window.bottom), strokeWidth = 1.dp.toPx())
             drawLine(gridColor, Offset(window.left, y), Offset(window.right, y), strokeWidth = 1.dp.toPx())
         }
+    }
+}
+
+/**
+ * The zoom slider, for one hand. Logarithmic (each step zooms by the same factor), snapping onto
+ * Fit and Fill with a small tick. Says "Fit" / "Fill" when it's on one of them.
+ */
+@Composable
+private fun ZoomSlider(
+    zoom: () -> Float,
+    fitZoom: Float,
+    minZoom: Float,
+    maxZoom: Float,
+    cropCenter: () -> Offset,
+    image: ImageBitmap,
+    aspectRatio: Float,
+    onZoomChange: (Float, Offset) -> Unit
+) {
+    val snapper = ZoomSnapper(LocalHapticFeedback.current)
+    val range = ln(maxZoom / minZoom).coerceAtLeast(0.0001f)
+    val current = zoom()
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .widthIn(max = 420.dp)
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp)
+    ) {
+        Text(
+            stringResource(
+                when (current) {
+                    1f -> R.string.mode_fill
+                    fitZoom -> R.string.mode_fit
+                    else -> R.string.editor_zoom_label
+                }
+            ),
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.width(48.dp)
+        )
+        Slider(
+            value = (ln(current / minZoom) / range).coerceIn(0f, 1f),
+            onValueChange = { t ->
+                val newZoom = snapper.apply(minZoom * exp(t * range), current, fitZoom, minZoom, maxZoom)
+                onZoomChange(newZoom, clampedCenter(image, aspectRatio, newZoom, cropCenter()))
+            },
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 

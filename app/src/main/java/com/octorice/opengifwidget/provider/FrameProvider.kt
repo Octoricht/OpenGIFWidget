@@ -17,7 +17,8 @@ import java.io.FileNotFoundException
  * (widget 42, version 1712345, frame 7) and the launcher asks this provider to open them.
  *
  * It's read-only and only serves frame files: every part of the address must be a number,
- * so nobody can use it to reach any other file.
+ * so nobody can use it to reach any other file. The one exception is the fixed word "mask" as
+ * the last part (.../42/1712345/mask), for the shape mask saved next to shaped frames.
  */
 class FrameProvider : ContentProvider() {
 
@@ -30,12 +31,18 @@ class FrameProvider : ContentProvider() {
         val segments = uri.pathSegments
         val appWidgetId = segments.getOrNull(0)?.toIntOrNull()
         val version = segments.getOrNull(1)?.toLongOrNull()
-        val index = segments.getOrNull(2)?.toIntOrNull()
-        if (segments.size != 3 || appWidgetId == null || version == null || index == null || index < 0) {
+        val last = segments.getOrNull(2)
+        val isMask = last == MASK
+        val index = last?.toIntOrNull()
+        if (segments.size != 3 || appWidgetId == null || version == null || (!isMask && (index == null || index < 0))) {
             throw FileNotFoundException(uri.toString())
         }
 
-        val file = GifStorage.frameFile(context, appWidgetId, version, index)
+        val file = if (isMask) {
+            GifStorage.maskFile(context, appWidgetId, version)
+        } else {
+            GifStorage.frameFile(context, appWidgetId, version, index!!)
+        }
         if (!file.isFile) throw FileNotFoundException(uri.toString())
         return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
     }
@@ -63,6 +70,18 @@ class FrameProvider : ContentProvider() {
     ): Int = 0
 
     companion object {
+        private const val MASK = "mask"
+
+        /** The shape mask of a set of shaped frames (see FrameSet.masked). */
+        fun maskUri(context: Context, appWidgetId: Int, version: Long): Uri =
+            Uri.Builder()
+                .scheme("content")
+                .authority("${context.packageName}.frames")
+                .appendPath("$appWidgetId")
+                .appendPath("$version")
+                .appendPath(MASK)
+                .build()
+
         fun frameUri(context: Context, appWidgetId: Int, version: Long, index: Int): Uri =
             Uri.Builder()
                 .scheme("content")

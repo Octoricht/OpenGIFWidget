@@ -14,6 +14,8 @@ import androidx.annotation.RequiresApi
 import androidx.core.graphics.createBitmap
 import com.octorice.opengifwidget.R
 import com.octorice.opengifwidget.data.ImportException
+import com.octorice.opengifwidget.shape.ShapeMask
+import com.octorice.opengifwidget.shape.WidgetShape
 import pl.droidsonroids.gif.GifDecoder
 import pl.droidsonroids.gif.InputSource
 import kotlinx.coroutines.Dispatchers
@@ -38,7 +40,9 @@ data class FrameSet(
     val sourceFrameCount: Int, // frames in the original file
     val intervalMs: Int,       // average time per saved frame, at normal speed
     val width: Int,
-    val height: Int
+    val height: Int,
+    val masked: Boolean = false, // widget frames cut into a shape (the folder also has a mask file)
+    val boxed: Boolean = false   // widget frames made with a custom zoom: they already have the box's shape
 )
 
 /**
@@ -80,6 +84,7 @@ object FrameExtractor {
     // Still pictures: only one bitmap in the launcher, so they can be much sharper.
     private const val STILL_MASTER_MAX_SIDE_PX = 1620 // room for a Fill crop
     private const val STILL_QUALITY = 90
+    private const val MASK_QUALITY = 90
     private const val STILL_INTERVAL_MS = 1000 // unused for display; a still has one frame
 
     // Browsers treat very short delays (0-10 ms) as 100 ms, so GIFs play at the speed people expect.
@@ -296,6 +301,12 @@ object FrameExtractor {
     /**
      * Makes the widget's frames from the master frames in [masterDir]:
      * the whole picture (Fit, [crop] = null) or the Fill crop, small enough for the launcher.
+     * With a [shape], the frames get the shape's box shape (for Fill, [crop] must use the shape's
+     * aspect; for Fit the picture is centered inside the box), everything outside the shape is
+     * made see-through, and the mask is saved next to the frames for the widget's background.
+     * With a custom [zoom] (1 = Fill, see [Zoom]), [crop] gives the box's aspect and center, and the
+     * frames are the box: the picture zoomed and placed in it, empty space see-through.
+     * Without [zoom] (Fit / Fill presets), everything works exactly as before zoom existed.
      */
     fun deriveWidgetFrames(
         master: FrameSet,
@@ -306,12 +317,30 @@ object FrameExtractor {
         limits: FrameLimits = FrameLimits.NORMAL,
         widgetMaxSidePx: Int? = null, // the widget's longest side on screen, if known
         cornerRadiusFraction: Float = 0f, // > 0: cut rounded corners (radius = this x frame width)
+        shape: WidgetShape? = null,
+        zoom: Float? = null,
         onProgress: (done: Int, total: Int) -> Unit
     ): FrameSet {
-        val source = if (crop == null) {
+        // Custom zoom: the part of the picture the box shows (may reach past its edges).
+        val zoomBox = if (zoom != null && crop != null) {
+            Zoom.box(master.width.toFloat(), master.height.toFloat(), crop.aspectRatio, zoom, crop.centerX, crop.centerY)
+        } else {
+            null
+        }
+        val source = if (crop == null || zoomBox != null) {
             Rect(0, 0, master.width, master.height)
         } else {
             cropRect(master.width, master.height, crop)
+        }
+        // The frame's size before shrinking: the picture itself, or for Fit with a shape, the
+        // shape's box around it (the picture then sits in its middle).
+        var boxWidth = source.width().toDouble()
+        var boxHeight = source.height().toDouble()
+        if (zoomBox != null) {
+            boxWidth = zoomBox.width().toDouble()
+            boxHeight = zoomBox.height().toDouble()
+        } else if (shape != null && crop == null) {
+            if (boxWidth / boxHeight > shape.aspect) boxHeight = boxWidth / shape.aspect else boxWidth = boxHeight * shape.aspect
         }
 
         // Shrink to the size limit, then more if all frames together are still too big.
@@ -320,21 +349,32 @@ object FrameExtractor {
         val limitSide = if (still) limits.stillMaxSidePx else limits.animationMaxSidePx
         val maxSide = if (widgetMaxSidePx != null && widgetMaxSidePx > 0) minOf(limitSide, widgetMaxSidePx) else limitSide
         val quality = if (still) STILL_QUALITY else WIDGET_QUALITY
-        var scale = min(1.0, maxSide / max(source.width(), source.height()).toDouble())
-        val totalPixels = master.frameCount * (source.width() * scale) * (source.height() * scale)
+        var scale = min(1.0, maxSide / max(boxWidth, boxHeight))
+        // A shape's background layer counts as one more frame.
+        val layers = master.frameCount + (if (shape != null) 1 else 0)
+        val totalPixels = layers * (boxWidth * scale) * (boxHeight * scale)
         // (The launcher holds all frames in memory at once: about 4 bytes per pixel.)
         if (totalPixels > limits.maxTotalPixels) scale *= sqrt(limits.maxTotalPixels / totalPixels)
-        val outWidth = max(1, (source.width() * scale).roundToInt())
-        val outHeight = max(1, (source.height() * scale).roundToInt())
+        val outWidth = max(1, (boxWidth * scale).roundToInt())
+        val outHeight = max(1, (boxHeight * scale).roundToInt())
+        val pictureWidth = max(1, (source.width() * scale).roundToInt()).coerceAtMost(outWidth)
+        val pictureHeight = max(1, (source.height() * scale).roundToInt()).coerceAtMost(outHeight)
+        val left = (outWidth - pictureWidth) / 2
+        val top = (outHeight - pictureHeight) / 2
 
         outDir.mkdirs()
         val output = createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
         val paint = Paint(Paint.FILTER_BITMAP_FLAG)
-        val target = Rect(0, 0, outWidth, outHeight)
+        val target = Rect(left, top, left + pictureWidth, top + pictureHeight)
+        // Custom zoom: where the whole master frame lands in the output (parts outside are simply cut off).
+        val zoomTarget = zoomBox?.let { box ->
+            val k = outWidth / box.width()
+            RectF(-box.left * k, -box.top * k, (master.width - box.left) * k, (master.height - box.top) * k)
+        }
         // Rounded corners (for Android 8-11, which don't round widgets): the four corner areas,
         // erased after each frame is drawn. Anti-aliased, so the edges stay smooth.
-        val corners = if (cornerRadiusFraction > 0f) {
+        val corners = if (cornerRadiusFraction > 0f && shape == null) {
             val radius = cornerRadiusFraction * outWidth
             val full = RectF(0f, 0f, outWidth.toFloat(), outHeight.toFloat())
             Path().apply {
@@ -345,24 +385,37 @@ object FrameExtractor {
             null
         }
         val erasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT) }
+        // Shape: each frame keeps only as much of itself as the mask has (DST_IN multiplies
+        // the frame's transparency by the mask's), so soft edges and gray areas work.
+        val mask = shape?.let { ShapeMask.render(it, outWidth, outHeight) }
+        val maskPaint = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
         var masterFrame: Bitmap? = null
         try {
+            if (mask != null) FrameFiles.writeWebp(mask, File(outDir, FrameFiles.MASK_FILE_NAME), MASK_QUALITY)
             for (index in 0 until master.frameCount) {
                 val file = File(masterDir, FrameFiles.frameFileName(index))
                 masterFrame = FrameFiles.decode(file, reuse = masterFrame)
                     ?: throw ImportException(R.string.error_frames_missing)
                 output.eraseColor(Color.TRANSPARENT)
-                canvas.drawBitmap(masterFrame, source, target, paint)
+                if (zoomTarget != null) {
+                    canvas.drawBitmap(masterFrame, null, zoomTarget, paint)
+                } else {
+                    canvas.drawBitmap(masterFrame, source, target, paint)
+                }
                 if (corners != null) canvas.drawPath(corners, erasePaint)
+                if (mask != null) canvas.drawBitmap(mask, 0f, 0f, maskPaint)
                 FrameFiles.writeWebp(output, File(outDir, FrameFiles.frameFileName(index)), quality)
                 onProgress(index + 1, master.frameCount)
             }
         } finally {
             output.recycle()
+            mask?.recycle()
             masterFrame?.recycle()
         }
 
-        return master.copy(version = version, width = outWidth, height = outHeight)
+        return master.copy(
+            version = version, width = outWidth, height = outHeight, masked = mask != null, boxed = zoomBox != null
+        )
     }
 
     /**

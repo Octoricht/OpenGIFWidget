@@ -25,6 +25,11 @@ Real devices that can't be emulated: Samsung (One UI), Xiaomi (MIUI/HyperOS), On
 - [ ] Resize each widget from small (1x1) to very large: no stretching; Fit and Fill both correct
 - [ ] Fill: drag the crop in the editor, Save: the widget shows that part
 - [ ] Background color + opacity, Transparent with a transparent GIF/PNG
+- [ ] Shapes: Circle and Heart on a GIF, a picture and a video, in Fit and Fill; Reposition opens on the first shape pick
+- [ ] Shapes in a 4x2 widget: the circle stays round, centered; resizing re-cuts it; background color/opacity follows the shape
+- [ ] Shape back to None: the widget looks exactly like before (full rounded background again)
+- [ ] Zoom: Reposition in Fit and Fill; pinch in/out and the slider snap (tick) on Fit and Fill; zoom out past Fit shows the background
+- [ ] Zoom: Cancel/Back restores the old zoom; Fit/Fill buttons snap (none lit for your own zoom); saved zoom survives resizing
 - [ ] Speed 0.25x and 3x; FPS cap 10 vs 30 in Settings changes all widgets right away
 - [ ] Reboot the emulator: every widget comes back and animates
 - [ ] Remove a widget from the home screen: its card disappears and storage drops

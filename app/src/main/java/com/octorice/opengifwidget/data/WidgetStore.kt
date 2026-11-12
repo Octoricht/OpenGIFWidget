@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
 import com.octorice.opengifwidget.gif.FrameSet
+import com.octorice.opengifwidget.shape.Shapes
+import com.octorice.opengifwidget.shape.WidgetShape
 
 /** What we remember about the picture chosen for one widget. */
 data class StoredGif(
@@ -93,11 +95,44 @@ object WidgetStore {
         return prefs.getInt("fit_px_$appWidgetId", 0) to prefs.getFloat("fit_aspect_$appWidgetId", 0f)
     }
 
-    fun saveFramesFit(context: Context, appWidgetId: Int, sidePx: Int, aspect: Float, rounded: Boolean) {
+    fun saveFramesFit(
+        context: Context, appWidgetId: Int, sidePx: Int, aspect: Float, rounded: Boolean, shapeId: String?, zoom: Float?
+    ) {
         prefs(context).edit {
+            if (zoom == null) remove("fit_zoom_$appWidgetId") else putFloat("fit_zoom_$appWidgetId", zoom)
             putInt("fit_px_$appWidgetId", sidePx)
             putFloat("fit_aspect_$appWidgetId", aspect)
             putBoolean("fit_round_$appWidgetId", rounded)
+            if (shapeId == null) remove("fit_shape_$appWidgetId") else putString("fit_shape_$appWidgetId", shapeId)
+        }
+    }
+
+    /** The custom zoom the current frames were made with (null = a Fit / Fill preset). */
+    fun getFramesZoom(context: Context, appWidgetId: Int): Float? =
+        prefs(context).let { if (it.contains("fit_zoom_$appWidgetId")) it.getFloat("fit_zoom_$appWidgetId", 1f) else null }
+
+    /**
+     * The widget's own zoom (1 = Fill, see Zoom), or null when it uses the Fit / Fill preset in
+     * [getScaleMode] (every v1.0 widget: they have no zoom saved, so they look exactly as before).
+     */
+    fun getZoom(context: Context, appWidgetId: Int): Float? =
+        prefs(context).let { if (it.contains("zoom_$appWidgetId")) it.getFloat("zoom_$appWidgetId", 1f) else null }
+
+    fun saveZoom(context: Context, appWidgetId: Int, zoom: Float?) {
+        prefs(context).edit { if (zoom == null) remove("zoom_$appWidgetId") else putFloat("zoom_$appWidgetId", zoom) }
+    }
+
+    /** The shape the current frames were cut into (null = none), to know if they need remaking. */
+    fun getFramesShapeId(context: Context, appWidgetId: Int): String? =
+        prefs(context).getString("fit_shape_$appWidgetId", null)
+
+    /** The widget's shape ("cookie cutter"), or null for none (the default, and every v1.0 widget). */
+    fun getShape(context: Context, appWidgetId: Int): WidgetShape? =
+        Shapes.byId(prefs(context).getString("shape_$appWidgetId", null))
+
+    fun saveShape(context: Context, appWidgetId: Int, shape: WidgetShape?) {
+        prefs(context).edit {
+            if (shape == null) remove("shape_$appWidgetId") else putString("shape_$appWidgetId", shape.id)
         }
     }
 
@@ -203,7 +238,9 @@ object WidgetStore {
             sourceFrameCount = getInt("${prefix}_source_count_$id", 0),
             intervalMs = getInt("${prefix}_interval_$id", 100),
             width = getInt("${prefix}_width_$id", 0),
-            height = getInt("${prefix}_height_$id", 0)
+            height = getInt("${prefix}_height_$id", 0),
+            masked = getBoolean("${prefix}_masked_$id", false),
+            boxed = getBoolean("${prefix}_boxed_$id", false)
         )
     }
 
@@ -218,5 +255,7 @@ object WidgetStore {
         putInt("${prefix}_interval_$id", frames.intervalMs)
         putInt("${prefix}_width_$id", frames.width)
         putInt("${prefix}_height_$id", frames.height)
+        putBoolean("${prefix}_masked_$id", frames.masked)
+        putBoolean("${prefix}_boxed_$id", frames.boxed)
     }
 }

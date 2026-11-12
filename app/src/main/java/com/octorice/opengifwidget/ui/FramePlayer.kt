@@ -22,6 +22,7 @@ import com.octorice.opengifwidget.data.AppSettings
 import com.octorice.opengifwidget.data.ScaleMode
 import com.octorice.opengifwidget.gif.FrameFiles
 import com.octorice.opengifwidget.gif.FrameSet
+import com.octorice.opengifwidget.gif.Zoom
 import com.octorice.opengifwidget.widget.Playback
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -99,8 +100,30 @@ fun fillPlacement(boxWidth: Int, boxHeight: Int, imageWidth: Int, imageHeight: I
  * [center] (Fill). [center] is a function so dragging only redraws, without rebuilding the screen.
  */
 @Composable
-fun FrameImage(image: ImageBitmap, scaleMode: ScaleMode, center: () -> Offset, modifier: Modifier = Modifier) {
+fun FrameImage(
+    image: ImageBitmap,
+    scaleMode: ScaleMode,
+    center: () -> Offset,
+    modifier: Modifier = Modifier,
+    zoom: (() -> Float?)? = null // custom zoom (1 = Fill, see Zoom); null = the scaleMode preset
+) {
     Canvas(modifier.clipToBounds()) {
+        val custom = zoom?.invoke()
+        if (custom != null) {
+            // The same box the widget frames are made from (Zoom.box), stretched over this view.
+            val c = center()
+            val box = Zoom.box(image.width.toFloat(), image.height.toFloat(), size.width / size.height, custom, c.x, c.y)
+            val k = size.width / box.width()
+            drawImage(
+                image = image,
+                srcOffset = IntOffset.Zero,
+                srcSize = IntSize(image.width, image.height),
+                dstOffset = IntOffset((-box.left * k).roundToInt(), (-box.top * k).roundToInt()),
+                dstSize = IntSize((image.width * k).roundToInt(), (image.height * k).roundToInt()),
+                filterQuality = FilterQuality.Medium
+            )
+            return@Canvas
+        }
         val boxWidth = size.width.roundToInt()
         val boxHeight = size.height.roundToInt()
         val spot = if (scaleMode == ScaleMode.FIT) {

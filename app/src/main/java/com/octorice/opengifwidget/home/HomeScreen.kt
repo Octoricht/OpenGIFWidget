@@ -78,6 +78,7 @@ import com.octorice.opengifwidget.R
 import com.octorice.opengifwidget.data.AppSettings
 import com.octorice.opengifwidget.data.ScaleMode
 import com.octorice.opengifwidget.ui.FrameImage
+import com.octorice.opengifwidget.ui.ShapedBox
 import com.octorice.opengifwidget.ui.toComposeColor
 import com.octorice.opengifwidget.ui.rememberFramePlayer
 import kotlinx.coroutines.Dispatchers
@@ -341,14 +342,23 @@ private fun WidgetCard(
                 .fillMaxWidth()
                 .aspectRatio(widget.aspectRatio)
                 .clip(RoundedCornerShape(18.dp))
-                .background(widget.background.toComposeColor())
+                // With a shape, only the shape gets the background (drawn by ShapedBox below).
+                .then(if (widget.shape == null) Modifier.background(widget.background.toComposeColor()) else Modifier)
         ) {
             // The widget's frames are already cropped for Fill, so Fill just centers them here.
             val image = rememberFramePlayer(widget.framesDir, frames, maxSidePx = 512, widget.speed, fpsCap)
             if (image != null) {
-                FrameImage(image, widget.scaleMode, { Offset(0.5f, 0.5f) }, Modifier.fillMaxSize())
+                if (widget.shape != null) {
+                    // Already cut into the shape: just centered, on the shape-colored background.
+                    ShapedBox(widget.shape, widget.background, Modifier.fillMaxSize(), cutContent = false) {
+                        FrameImage(image, ScaleMode.FIT, { Offset(0.5f, 0.5f) }, Modifier.fillMaxSize())
+                    }
+                } else {
+                    FrameImage(image, if (widget.zoomed) ScaleMode.FIT else widget.scaleMode, { Offset(0.5f, 0.5f) }, Modifier.fillMaxSize())
+                }
                 ModeBadge(
                     widget.scaleMode,
+                    zoomed = widget.zoomed,
                     Modifier
                         .align(Alignment.TopEnd)
                         .padding(8.dp)
@@ -422,7 +432,7 @@ private fun HeavyTag(modifier: Modifier = Modifier) {
 
 /** Small "Fit" / "Fill" pill on top of the preview. */
 @Composable
-private fun ModeBadge(mode: ScaleMode, modifier: Modifier = Modifier) {
+private fun ModeBadge(mode: ScaleMode, zoomed: Boolean, modifier: Modifier = Modifier) {
     Surface(
         shape = RoundedCornerShape(50),
         color = Color.Black.copy(alpha = 0.55f),
@@ -430,7 +440,13 @@ private fun ModeBadge(mode: ScaleMode, modifier: Modifier = Modifier) {
         modifier = modifier
     ) {
         Text(
-            stringResource(if (mode == ScaleMode.FIT) R.string.mode_fit else R.string.mode_fill),
+            stringResource(
+                when {
+                    zoomed -> R.string.mode_zoom
+                    mode == ScaleMode.FIT -> R.string.mode_fit
+                    else -> R.string.mode_fill
+                }
+            ),
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         )

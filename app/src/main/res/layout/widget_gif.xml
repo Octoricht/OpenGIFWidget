@@ -17,6 +17,18 @@
         android:src="@drawable/widget_background" />
 
     <!--
+        Shapes: the background takes the shape instead. Shows the shape's mask (served by
+        FrameProvider), tinted and faded like widget_bg. Hidden unless the widget has a shape.
+    -->
+    <ImageView
+        android:id="@+id/widget_shape_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no"
+        android:scaleType="fitCenter"
+        android:visibility="gone" />
+
+    <!--
         Animations: holds one ImageView per frame and shows them one after another.
         autoStart = start flipping by itself as soon as the launcher shows it.
         The flip interval (frame speed) is set from code for each widget.

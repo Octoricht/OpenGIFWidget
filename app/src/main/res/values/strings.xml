@@ -69,6 +69,12 @@
     <string name="home_empty_button">Add your first widget</string>
     <string name="mode_fit">Fit</string>
     <string name="mode_fill">Fill</string>
+    <string name="mode_zoom">Zoom</string>
+    <string name="editor_zoom_description">Your own zoom. Tap Fit or Fill to go back to a preset, or Reposition to change it.</string>
+    <string name="editor_zoom_label">Zoom</string>
+    <string name="editor_zoom_out">Zoom out</string>
+    <string name="editor_zoom_in">Zoom in</string>
+    <string name="editor_reposition_hint">Pinch to zoom, drag to move.</string>
 
     <!-- Editor -->
     <string name="editor_title_new">New widget</string>
@@ -167,6 +173,21 @@
 
     <!-- Editor: background -->
     <string name="editor_background">Background</string>
+    <!-- Shapes (cookie cutters) -->
+    <string name="editor_shape">Shape</string>
+    <string name="shape_none">None</string>
+    <string name="shape_circle">Circle</string>
+    <string name="shape_heart">Heart</string>
+    <string name="shape_star">Star</string>
+    <string name="shape_chonky_star">Chonky star</string>
+    <string name="shape_sparkle">Sparkle</string>
+    <string name="shape_scallop">Scallop</string>
+    <string name="shape_clover">Clover</string>
+    <string name="shape_flower">Flower</string>
+    <string name="shape_burst">Burst</string>
+    <string name="shape_dots">Dots</string>
+    <string name="shape_arch">Arch</string>
+    <string name="shape_moon">Moon</string>
     <string name="editor_opacity">Opacity: %1$d%%</string>
     <string name="color_transparent">Transparent</string>
     <string name="color_custom">Custom color</string>

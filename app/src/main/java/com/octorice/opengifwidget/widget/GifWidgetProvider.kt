@@ -104,9 +104,12 @@ class GifWidgetProvider : AppWidgetProvider() {
                 views.setViewVisibility(R.id.widget_label, View.GONE)
 
                 // Fit and Fill are two tiny layouts that differ only in the ImageView's scaleType.
-                val frameLayout = when (WidgetStore.getScaleMode(context, appWidgetId)) {
-                    ScaleMode.FIT -> R.layout.widget_frame_fit
-                    ScaleMode.FILL -> R.layout.widget_frame_fill
+                // Shaped and custom-zoom frames already have their box's shape: they're only
+                // centered (Fit), never cropped again.
+                val frameLayout = when {
+                    frames.masked || frames.boxed -> R.layout.widget_frame_fit
+                    WidgetStore.getScaleMode(context, appWidgetId) == ScaleMode.FIT -> R.layout.widget_frame_fit
+                    else -> R.layout.widget_frame_fill
                 }
                 // The launcher often re-applies an update on top of the widget it already shows
                 // instead of rebuilding it, so clear the old frames first. Without this, every
@@ -151,8 +154,23 @@ class GifWidgetProvider : AppWidgetProvider() {
 
             // Background color and opacity: the rounded shape is tinted to the color, then faded.
             val background = WidgetStore.getBackground(context, appWidgetId)
-            views.setInt(R.id.widget_bg, "setColorFilter", background.color)
-            views.setInt(R.id.widget_bg, "setImageAlpha", background.alpha)
+            if (frames != null && frames.masked) {
+                // A shape: the background takes the shape too. Its mask (white where the shape is)
+                // is tinted the same way, so changing the color never remakes frames. The launcher
+                // loads the small mask file itself; no bitmap travels through RemoteViews.
+                views.setViewVisibility(R.id.widget_bg, View.GONE)
+                views.setImageViewUri(R.id.widget_shape_bg, FrameProvider.maskUri(context, appWidgetId, frames.version))
+                views.setInt(R.id.widget_shape_bg, "setColorFilter", background.color)
+                views.setInt(R.id.widget_shape_bg, "setImageAlpha", background.alpha)
+                views.setViewVisibility(R.id.widget_shape_bg, View.VISIBLE)
+            } else {
+                // No shape: exactly the v1.0 widget. The visibilities are the layout's defaults; they're
+                // set anyway because launchers re-apply updates on top of the old widget (after Heart -> None).
+                views.setViewVisibility(R.id.widget_shape_bg, View.GONE)
+                views.setViewVisibility(R.id.widget_bg, View.VISIBLE)
+                views.setInt(R.id.widget_bg, "setColorFilter", background.color)
+                views.setInt(R.id.widget_bg, "setImageAlpha", background.alpha)
+            }
 
             // Tapping the widget opens the GIF picker for this widget.
             views.setOnClickPendingIntent(android.R.id.background, configIntent(context, appWidgetId))

@@ -46,8 +46,65 @@ RemoteViews can't play GIFs directly, so:
   Android 8-11 never clip widgets: anything drawn edge to edge needs its own rounded shape (e.g. `widget_label_background`).
   For Fill pictures there, `deriveWidgetFrames` cuts rounded corners into the frames (transparent, anti-aliased,
   radius = widget corner radius / widget width). Per-widget editor switch "Rounded corners" (`round_<id>`, default on),
-  shown only on Android 8-11 in Fill (`WidgetSizes.needsRoundedFrames`). `fit_round_<id>` records whether the current
+  shown only on Android 8-11 in Fill without a shape (`WidgetSizes.needsRoundedFrames`). `fit_round_<id>` records whether the current
   frames are rounded; `WidgetFrames.refreshIfNeeded` remakes them when that doesn't match (fixes older widgets on app open).
+- Shapes ("cookie cutters", v1.1; `shape/Shapes.kt`): `WidgetShape(id, nameRes, aspect, path in a 0..1 unit square)`;
+  `Shapes.all` is the registry (adding a shape = one entry + its string). Now: Circle, Heart, Star, Chonky star (both from `roundedStar(inner, tipRound,
+  valleyRound)`: 5 corners each rounded with a quadratic curve, scaled to fill the unit square). Sparkle: a big slanted 4-point
+  sparkle + a small one (`Shapes.Sparkle`: cubic sides bent toward each center, `FAT` = 0.32 chosen by the user); not square,
+  its `aspect` (~1.2) comes from the drawing's bounds. Scallop: circle with 12 deep round bumps (depth 0.18)
+  (`scallop(bumps, depth)`, polar half-circle per bump, drawn as 1440 short lines). Clover (4 circles) and Flower
+  (5 petals) = overlapping same-direction circles (`circles()`, joined by the non-zero fill rule); Burst = 14 sharp points.
+  `Fit` centers any drawing in the unit square. Moon (`moonOutline`): circle minus an offset circle (upper left), each tip rounded by a
+  tiny circle touching both edges (user's "3. Fatter": offset 0.72, cut 0.86).
+  - Patterns (`DotsPattern`, the "Dots" shape: 3x3-style grid of slightly overlapping dots, user's "2. Stuck together"):
+    the dots keep ~56 dp; a bigger widget gets more dots, not bigger ones. `WidgetShape.forSize(dp)` returns the sized shape
+    (`dots@6x3`, aspect = grid's, cached per grid) and `base` the picked one. ALWAYS resolve with
+    `WidgetSizes.shapeFor(context, id, shape)` before using aspect / path / mask (WidgetFrames.make + refreshIfNeeded,
+    the editor's `drawnShape`); save only the picked (base) shape in `shape_<id>`. `fit_shape_<id>` stores the sized id, so a
+    resize that changes the grid re-cuts the frames. `Shapes.byId` reads sized ids via `WidgetShape.sized(key)` (used by the app's cards).
+    `ArchPattern` ("Arch"): fills the widget's whole shape, top = half circle as wide as the widget (or corners as
+    round as the height allows on very wide widgets); sized by aspect in 0.05 steps (`arch@1.50`). `ShapeMask.render` draws the
+  anti-aliased mask (white = shown, transparent = cut, partial alpha = partly see-through) and is the ONE source for
+  widget frames, widget background and editor/card previews (`ui/ShapeUi.kt`: `ShapedBox`, `ShapePicker`; picker icons
+  are drawn from the same path). Planned later: zoom in Reposition, custom shapes from photos, library, Pixelify, Reverse, painter.
+  - Baking: `deriveWidgetFrames(shape=...)` applies the mask with `DST_IN` after the Fit/Fill crop. Frames are sized to the
+    shape box (largest box of the shape's aspect in the widget, centered; `WidgetSizes.shapeMaxSidePx`), not the widget.
+    Fill: crop aspect = shape aspect (Reposition/crop center unchanged; CropView shows the shape outline). Fit: picture
+    centered inside the box. The mask is saved as `mask.webp` next to the widget frames; `FrameSet.masked` (`frames_masked_<id>`).
+    The shape replaces Android 8-11 rounded corners (never both). Master frames are never touched.
+  - Widget: shaped frames always use the Fit layout (fitCenter, never cropped again). `widget_bg` is hidden and
+    `widget_shape_bg` (fitCenter) shows the mask via `FrameProvider.maskUri` (`/<id>/<version>/mask`, the only non-numeric
+    path, read-only), tinted with `setColorFilter` + `setImageAlpha`, so background changes never remake frames.
+    Shape None = the v1.0 widget (visibilities are always set explicitly because launchers re-apply on top).
+  - Storage: `shape_<id>` (absent = None, so v1.0 widgets are unchanged), `fit_shape_<id>` = shape the frames were cut with;
+    `refreshIfNeeded` remakes on mismatch and on size changes of the shape box (widget aspect changes don't re-crop a shape).
+  - Editor: "Shape" row under Fit/Fill (None + shapes, scrolls sideways; "Custom" goes at the end later). Picking only changes
+    the preview; frames are made on Save. Going from None to a shape opens Reposition once per editor visit (Fit or Fill).
+  - RAM: `UsageHealth.widgetCost` counts the mask as one extra frame when `frames.masked`; the per-widget pixel budget in
+    `deriveWidgetFrames` counts it too.
+- Zoom (v1.1, `gif/Zoom.kt`, shared by editor preview, Reposition and frame baking): the "box" = shape box, or the widget
+  without a shape. Zoom 1 = Fill (picture just covers the box); `fitZoom` = Fit (whole picture just fits, <= 1).
+  `Zoom.box()` = the part of the picture the box shows, in picture pixels (can reach past the picture when zoomed out):
+  where the picture is bigger than the box, the box stays inside it; where smaller, the picture stays inside the box
+  (it can move around). Limits: min = half of Fit (`MIN_OF_FIT`), max = 2x Fill but only while master frames have at least
+  1 px per real widget-frame px (`maxZoom`; the editor's `outputSidePx` includes the RAM budget split over all frames,
+  which makes frames of long GIFs/videos small), never below 1.5x (`MIN_MAX_ZOOM`). Snapping within 4% of Fit/Fill, with a haptic tick.
+  - Storage: `zoom_<id>` only for a custom zoom; absent = the Fit / Fill preset in `scale_mode_<id>` (so v1.0 widgets
+    keep the exact old code paths). `fit_zoom_<id>` = zoom the frames were made with; `refreshIfNeeded` remakes on mismatch,
+    and a custom zoom without a shape re-cuts when the widget's aspect changes (like Fill).
+  - Baking: `deriveWidgetFrames(zoom=...)` (crop gives box aspect + center): frames = the box, picture drawn into it, empty
+    space transparent; `FrameSet.boxed` (`frames_boxed_<id>`) -> widget uses the Fit layout. Presets (zoom null) use the
+    unchanged legacy paths. Frame size = box size, like Fill, so the RAM estimate rules don't change.
+  - Editor: Reposition works in Fit and Fill: `ZoomView` (window fixed, picture moves under it; pinch + drag via
+    `detectTransformGestures`, values read through `rememberUpdatedState` so a playing GIF doesn't restart the gesture) +
+    a logarithmic `ZoomSlider`. While repositioning the zoom is always a number; Done turns it into the FIT preset (zoom ==
+    fitZoom and centered) or FILL (zoom == 1), else it stays custom. Cancel/Back restores zoom, mode and center. Fit/Fill
+    buttons are presets (lit only when the zoom is exactly on them; Fit recenters). A Fit preset is always drawn centered.
+    Picking a first shape opens Reposition (Fit or Fill) on the next frame, once the new box is known.
+  - Editor callbacks (onSave, start/endReposition, remakeFrames(), hasChanges()) must read ONLY live state (`by remember`
+    vars, `saved`, `rememberUpdatedState` values), never plain `val`s computed during composition, and are never passed as
+    `::fn` (Compose keeps an old copy of function references: Done dropped custom zooms and Save closed without saving).
 - Apps can't remove widgets from the home screen (only the launcher/host can). Long-press on a card in the app =
   "Remove from list": deletes its data and sets `hidden_<id>` (cleared when the widget is saved again). Launchers
   sometimes keep "ghost" ids from cancelled setups (OnePlus: adding from the home screen widget menu, then cancelling
@@ -123,4 +180,6 @@ RemoteViews can't play GIFs directly, so:
 - **Don't add libraries/dependencies without asking first.**
 - The user is learning: after each change, explain what changed and why, in simple terms.
 - Work one milestone/step at a time. After each one: make sure it builds, explain exactly how to test it on the phone, then stop and wait.
-- Git has a GitHub remote (`master` branch, account Octoricht). **Never commit or push unless the user says so.**
+- Git has a GitHub remote (`Octoricht/OpenGIFWidget`, `master` branch). **Never commit or push unless the user says so.**
+- **No AI attribution in commits:** never add `Co-Authored-By` (or similar) lines to commit messages. Commits use the
+  repo-local identity `Octorice <160361948+Octoricht@users.noreply.github.com>` (keeps the personal email private).

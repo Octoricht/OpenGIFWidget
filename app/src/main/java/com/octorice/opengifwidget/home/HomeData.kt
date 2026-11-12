@@ -8,6 +8,8 @@ import com.octorice.opengifwidget.data.ScaleMode
 import com.octorice.opengifwidget.data.StoredGif
 import com.octorice.opengifwidget.data.WidgetBackground
 import com.octorice.opengifwidget.data.WidgetStore
+import com.octorice.opengifwidget.shape.Shapes
+import com.octorice.opengifwidget.shape.WidgetShape
 import com.octorice.opengifwidget.widget.GifWidgetProvider
 import com.octorice.opengifwidget.widget.WidgetSizes
 import java.io.File
@@ -20,6 +22,8 @@ data class WidgetSummary(
     val scaleMode: ScaleMode,
     val speed: Float,
     val background: WidgetBackground,
+    val shape: WidgetShape?, // the shape the widget's frames are cut into (null = none)
+    val zoomed: Boolean,     // made with a custom zoom (the frames already have the widget's shape)
     val framesDir: File?,    // the widget's own frames, played as the card's preview
     val aspectRatio: Float,  // width / height of the widget on the home screen
     val storageBytes: Long
@@ -40,6 +44,8 @@ object HomeData {
                 scaleMode = WidgetStore.getScaleMode(context, id),
                 speed = WidgetStore.getSpeed(context, id),
                 background = WidgetStore.getBackground(context, id),
+                zoomed = gif?.frames?.boxed == true,
+                shape = if (gif?.frames?.masked == true) Shapes.byId(WidgetStore.getFramesShapeId(context, id)) else null,
                 framesDir = gif?.frames?.let { GifStorage.framesDir(context, id, it.version) },
                 aspectRatio = WidgetSizes.aspectRatio(context, id),
                 storageBytes = GifStorage.widgetStorageBytes(context, id)
