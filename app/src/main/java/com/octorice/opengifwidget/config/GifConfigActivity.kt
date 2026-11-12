@@ -17,6 +17,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -80,6 +85,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -212,6 +218,7 @@ class GifConfigActivity : ComponentActivity() {
                 roundCorners = WidgetStore.getRoundCorners(this, appWidgetId),
                 shape = WidgetStore.getShape(this, appWidgetId),
                 zoom = WidgetStore.getZoom(this, appWidgetId),
+                spin = WidgetStore.getSpin(this, appWidgetId),
                 background = WidgetStore.getBackground(this, appWidgetId),
                 speed = WidgetStore.getSpeed(this, appWidgetId)
             )
@@ -370,16 +377,17 @@ class GifConfigActivity : ComponentActivity() {
             val oldRounded = WidgetStore.getFramesRounded(context, appWidgetId)
             val oldShapeId = WidgetStore.getFramesShapeId(context, appWidgetId)
             val oldZoom = WidgetStore.getFramesZoom(context, appWidgetId)
+            val oldSpin = WidgetStore.getFramesSpin(context, appWidgetId)
             // Sized and shaped for the widget as it is on the home screen right now.
             val made = WidgetFrames.make(
                 context, appWidgetId, master, settings.scaleMode,
-                settings.cropCenter.x to settings.cropCenter.y, settings.roundCorners, settings.shape, settings.zoom, onProgress
+                settings.cropCenter.x to settings.cropCenter.y, settings.roundCorners, settings.shape, settings.zoom, settings.spin, onProgress
             )
             try {
                 checkMemoryLimit(context, made, settings.speed)
             } catch (e: ImportException) {
                 GifStorage.framesDir(context, appWidgetId, made.version).deleteRecursively()
-                WidgetStore.saveFramesFit(context, appWidgetId, oldFit.first, oldFit.second, oldRounded, oldShapeId, oldZoom)
+                WidgetStore.saveFramesFit(context, appWidgetId, oldFit.first, oldFit.second, oldRounded, oldShapeId, oldZoom, oldSpin)
                 throw e
             }
             frames = made
@@ -393,6 +401,7 @@ class GifConfigActivity : ComponentActivity() {
         WidgetStore.saveRoundCorners(context, appWidgetId, settings.roundCorners)
         WidgetStore.saveShape(context, appWidgetId, settings.shape)
         WidgetStore.saveZoom(context, appWidgetId, settings.zoom)
+        WidgetStore.saveSpin(context, appWidgetId, settings.spin)
         WidgetStore.saveBackground(context, appWidgetId, settings.background)
         WidgetStore.saveSpeed(context, appWidgetId, settings.speed)
         // An empty name falls back to the file's name.
@@ -462,6 +471,7 @@ private data class EditorSettings(
     val roundCorners: Boolean, // Android 8-11 only: cut rounded corners into Fill pictures
     val shape: WidgetShape?,   // cookie-cutter shape, null = none
     val zoom: Float?,          // custom zoom (1 = Fill), null = the Fit / Fill preset in scaleMode
+    val spin: Float?,          // "Make the CD spin": seconds per turn, null = off (only for shapes that spin)
     val background: WidgetBackground,
     val speed: Float
 )
@@ -522,6 +532,7 @@ private fun EditorScreen(
     var cropBeforeReposition by remember { mutableStateOf(cropCenter) }
     // Your own zoom (1 = Fill), or null while a Fit / Fill preset is used. Cancel goes back to these.
     var customZoom by remember { mutableStateOf(saved.settings.zoom) }
+    var spin by remember { mutableStateOf(saved.settings.spin) }
     var zoomBeforeReposition by remember { mutableStateOf(customZoom) }
     var modeBeforeReposition by remember { mutableStateOf(scaleMode) }
     var background by remember { mutableStateOf(saved.settings.background) }
@@ -573,6 +584,7 @@ private fun EditorScreen(
     fun remakeFrames() = picked != null ||
         saved.gif?.frames == null ||
         customZoom != saved.settings.zoom ||
+        WidgetFrames.spinFor(shape, spin) != WidgetFrames.spinFor(saved.settings.shape, saved.settings.spin) ||
         (customZoom == null && scaleMode != saved.settings.scaleMode) ||
         ((scaleMode == ScaleMode.FILL || customZoom != null) && cropCenter != saved.settings.cropCenter) ||
         shape != saved.settings.shape ||
@@ -702,7 +714,7 @@ private fun EditorScreen(
             busy = Busy.Saving(0, 0)
             error = null
             try {
-                val settings = EditorSettings(name, scaleMode, cropCenter, roundCorners, shape, customZoom, background, speed)
+                val settings = EditorSettings(name, scaleMode, cropCenter, roundCorners, shape, customZoom, spin, background, speed)
                 save(gif, settings, remakeFrames(), widgetAspectRatio) { done, total ->
                     busy = Busy.Saving(done, total)
                 }
@@ -821,7 +833,9 @@ private fun EditorScreen(
                         onEndReposition = { keep -> endReposition(keep) },
                         // Shows the corners the widget will really have (square on Android 8-11 when switched off).
                         squareCorners = shape == null && WidgetSizes.needsRoundedFrames &&
-                            (scaleMode == ScaleMode.FILL || customZoom != null) && !roundCorners
+                            (scaleMode == ScaleMode.FILL || customZoom != null) && !roundCorners,
+                        // The CD spins in the preview too, as fast as on the widget (speed included).
+                        spinMs = WidgetFrames.spinFor(shape, spin)?.let { (it * 1000 / speed).roundToInt() }
                     )
                 }
 
@@ -960,6 +974,11 @@ private fun EditorScreen(
                         onChange = pickShape
                     )
 
+                    // Only for the CD: one small switch, and the speed only once it's on.
+                    AnimatedVisibility(visible = shape?.spins == true) {
+                        SpinControls(spin, enabled = busy == null, onChange = { spin = it })
+                    }
+
                     // Android 8-11 don't round widget corners, so a Fill picture's corners are square there.
                     // Newer versions never see this switch. A shape replaces it.
                     AnimatedVisibility(
@@ -1037,6 +1056,7 @@ private fun Preview(
     maxZoom: Float,
     onZoomChange: (Float, Offset) -> Unit,
     squareCorners: Boolean,
+    spinMs: Int?,
     repositioning: Boolean,
     canReposition: Boolean,
     onStartReposition: () -> Unit,
@@ -1088,7 +1108,7 @@ private fun Preview(
                                 label = "preview"
                             ) { hasImage ->
                                 if (hasImage && image != null) {
-                                    FrameImage(image, scaleMode, cropCenter, Modifier.fillMaxSize(), zoom = zoom)
+                                    FrameImage(image, scaleMode, cropCenter, Modifier.fillMaxSize().spinning(spinMs), zoom = zoom)
                                 } else {
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1459,6 +1479,59 @@ private fun Progress(text: String, done: Int, total: Int, onCancel: (() -> Unit)
         if (onCancel != null) {
             Spacer(Modifier.width(12.dp))
             TextButton(onClick = onCancel) { Text(stringResource(R.string.progress_cancel)) }
+        }
+    }
+}
+
+/** Turns this round and round, one turn every [turnMs] (null = still). The shape around it stays put. */
+@Composable
+private fun Modifier.spinning(turnMs: Int?): Modifier {
+    if (turnMs == null) return this
+    val angle = androidx.compose.runtime.key(turnMs) {
+        rememberInfiniteTransition(label = "spin").animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(tween(turnMs, easing = LinearEasing)),
+            label = "spin"
+        )
+    }
+    return this.graphicsLayer { rotationZ = angle.value }
+}
+
+/**
+ * "Make the CD spin": a switch, and once it's on, one slider from slow to fast. Kept small on
+ * purpose (it's a fun extra). [spin] = seconds per turn, null = off.
+ */
+@Composable
+private fun SpinControls(spin: Float?, enabled: Boolean, onChange: (Float?) -> Unit) {
+    val choices = com.octorice.opengifwidget.gif.Spin.SECONDS_PER_TURN
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.editor_spin), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Switch(
+                checked = spin != null,
+                onCheckedChange = { on -> onChange(if (on) com.octorice.opengifwidget.gif.Spin.DEFAULT_SECONDS_PER_TURN else null) },
+                enabled = enabled
+            )
+        }
+        AnimatedVisibility(visible = spin != null) {
+            val current = spin ?: com.octorice.opengifwidget.gif.Spin.DEFAULT_SECONDS_PER_TURN
+            val index = choices.indexOfFirst { it == current }.takeIf { it >= 0 }
+                ?: choices.indices.minBy { kotlin.math.abs(choices[it] - current) }
+            Column {
+                Text(
+                    stringResource(R.string.editor_spin_speed, NumberFormat.getInstance().format(current)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Slider(
+                    value = index.toFloat(),
+                    onValueChange = { onChange(choices[it.roundToInt().coerceIn(0, choices.lastIndex)]) },
+                    valueRange = 0f..choices.lastIndex.toFloat(),
+                    steps = (choices.size - 2).coerceAtLeast(0),
+                    enabled = enabled
+                )
+            }
         }
     }
 }

@@ -319,8 +319,12 @@ object FrameExtractor {
         cornerRadiusFraction: Float = 0f, // > 0: cut rounded corners (radius = this x frame width)
         shape: WidgetShape? = null,
         zoom: Float? = null,
+        spin: Spin? = null, // turn the picture under the shape (CD), baked into the frames
         onProgress: (done: Int, total: Int) -> Unit
     ): FrameSet {
+        // Which master frame each widget frame shows, and how far it's turned (no spin: each once, not turned).
+        val spinPlan = spin?.plan(master)
+        val steps = spinPlan?.steps ?: List(master.frameCount) { Spin.Step(it, 0f) }
         // Custom zoom: the part of the picture the box shows (may reach past its edges).
         val zoomBox = if (zoom != null && crop != null) {
             Zoom.box(master.width.toFloat(), master.height.toFloat(), crop.aspectRatio, zoom, crop.centerX, crop.centerY)
@@ -344,14 +348,14 @@ object FrameExtractor {
         }
 
         // Shrink to the size limit, then more if all frames together are still too big.
-        val still = master.frameCount == 1
+        val still = steps.size == 1
         // Never bigger than the widget shows them (if we know its size), nor than the phone's limit.
         val limitSide = if (still) limits.stillMaxSidePx else limits.animationMaxSidePx
         val maxSide = if (widgetMaxSidePx != null && widgetMaxSidePx > 0) minOf(limitSide, widgetMaxSidePx) else limitSide
         val quality = if (still) STILL_QUALITY else WIDGET_QUALITY
         var scale = min(1.0, maxSide / max(boxWidth, boxHeight))
         // A shape's background layer counts as one more frame.
-        val layers = master.frameCount + (if (shape != null) 1 else 0)
+        val layers = steps.size + (if (shape != null) 1 else 0)
         val totalPixels = layers * (boxWidth * scale) * (boxHeight * scale)
         // (The launcher holds all frames in memory at once: about 4 bytes per pixel.)
         if (totalPixels > limits.maxTotalPixels) scale *= sqrt(limits.maxTotalPixels / totalPixels)
@@ -392,20 +396,29 @@ object FrameExtractor {
         var masterFrame: Bitmap? = null
         try {
             if (mask != null) FrameFiles.writeWebp(mask, File(outDir, FrameFiles.MASK_FILE_NAME), MASK_QUALITY)
-            for (index in 0 until master.frameCount) {
-                val file = File(masterDir, FrameFiles.frameFileName(index))
-                masterFrame = FrameFiles.decode(file, reuse = masterFrame)
-                    ?: throw ImportException(R.string.error_frames_missing)
-                output.eraseColor(Color.TRANSPARENT)
-                if (zoomTarget != null) {
-                    canvas.drawBitmap(masterFrame, null, zoomTarget, paint)
-                } else {
-                    canvas.drawBitmap(masterFrame, source, target, paint)
+            var decodedIndex = -1
+            for ((index, step) in steps.withIndex()) {
+                if (step.masterIndex != decodedIndex) {
+                    val file = File(masterDir, FrameFiles.frameFileName(step.masterIndex))
+                    masterFrame = FrameFiles.decode(file, reuse = masterFrame)
+                        ?: throw ImportException(R.string.error_frames_missing)
+                    decodedIndex = step.masterIndex
                 }
+                val frame = masterFrame!!
+                output.eraseColor(Color.TRANSPARENT)
+                // Spin: turn the picture around the middle; the shape (cut below) stays still.
+                canvas.save()
+                if (step.degrees != 0f) canvas.rotate(step.degrees, outWidth / 2f, outHeight / 2f)
+                if (zoomTarget != null) {
+                    canvas.drawBitmap(frame, null, zoomTarget, paint)
+                } else {
+                    canvas.drawBitmap(frame, source, target, paint)
+                }
+                canvas.restore()
                 if (corners != null) canvas.drawPath(corners, erasePaint)
                 if (mask != null) canvas.drawBitmap(mask, 0f, 0f, maskPaint)
                 FrameFiles.writeWebp(output, File(outDir, FrameFiles.frameFileName(index)), quality)
-                onProgress(index + 1, master.frameCount)
+                onProgress(index + 1, steps.size)
             }
         } finally {
             output.recycle()
@@ -414,7 +427,9 @@ object FrameExtractor {
         }
 
         return master.copy(
-            version = version, width = outWidth, height = outHeight, masked = mask != null, boxed = zoomBox != null
+            version = version, width = outWidth, height = outHeight, masked = mask != null, boxed = zoomBox != null,
+            frameCount = steps.size,
+            intervalMs = spinPlan?.intervalMs ?: master.intervalMs
         )
     }
 

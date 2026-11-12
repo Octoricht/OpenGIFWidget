@@ -11,6 +11,8 @@ import com.octorice.opengifwidget.gif.Crop
 import com.octorice.opengifwidget.gif.FrameExtractor
 import com.octorice.opengifwidget.gif.FrameLimits
 import com.octorice.opengifwidget.gif.FrameSet
+import com.octorice.opengifwidget.gif.Spin
+import com.octorice.opengifwidget.data.AppSettings
 import com.octorice.opengifwidget.shape.WidgetShape
 import kotlin.math.abs
 
@@ -34,11 +36,13 @@ object WidgetFrames {
         roundCorners: Boolean,
         pickedShape: WidgetShape?,
         zoom: Float?, // custom zoom (1 = Fill), or null for the Fit / Fill preset in [scaleMode]
+        spinSeconds: Float?, // "Make the CD spin": seconds per turn, or null (only used if the shape spins)
         onProgress: (Int, Int) -> Unit = { _, _ -> }
     ): FrameSet = synchronized(lock) {
         // The shape as drawn at this widget's size (a pattern like Dots gets more dots when bigger).
         val shape = WidgetSizes.shapeFor(context, appWidgetId, pickedShape)
         val aspect = WidgetSizes.aspectRatio(context, appWidgetId)
+        val spinUsed = spinFor(shape, spinSeconds)
         // With a shape, frames have the shape's box shape (e.g. square), not the widget's.
         val target = if (shape != null) {
             WidgetSizes.shapeMaxSidePx(context, appWidgetId, shape.aspect)
@@ -62,13 +66,17 @@ object WidgetFrames {
                 cornerRadiusFraction = cornerFraction,
                 shape = shape,
                 zoom = zoom,
+                spin = spinUsed?.let { Spin(it, AppSettings.getFpsCap(context)) },
                 onProgress = onProgress
             )
         }
         // Remember the size and shape these frames were made for, to know later if they still fit.
-        WidgetStore.saveFramesFit(context, appWidgetId, target ?: 0, aspect, rounded, shape?.id, zoom)
+        WidgetStore.saveFramesFit(context, appWidgetId, target ?: 0, aspect, rounded, shape?.id, zoom, spinUsed)
         frames
     }
+
+    /** The spin that really applies: only with a shape that can spin (the CD), else none. */
+    fun spinFor(shape: WidgetShape?, spinSeconds: Float?): Float? = if (shape?.spins == true) spinSeconds else null
 
     /**
      * Whether frames get rounded corners cut in: only on Android 8-11 (newer versions round widgets
@@ -102,6 +110,8 @@ object WidgetFrames {
         val cutterChanged = cutter?.id != WidgetStore.getFramesShapeId(context, appWidgetId)
         val zoom = WidgetStore.getZoom(context, appWidgetId)
         val zoomChanged = zoom != WidgetStore.getFramesZoom(context, appWidgetId)
+        val spinSeconds = WidgetStore.getSpin(context, appWidgetId)
+        val spinChanged = spinFor(cutter, spinSeconds) != WidgetStore.getFramesSpin(context, appWidgetId)
 
         val sizeChanged = oldTarget == 0 || newTarget > oldTarget * 1.15 || newTarget < oldTarget * 0.7
         val newAspect = WidgetSizes.aspectRatio(context, appWidgetId)
@@ -109,11 +119,11 @@ object WidgetFrames {
         val shapeChanged = cutter == null && (scaleMode == ScaleMode.FILL || zoom != null) && oldAspect > 0f && abs(newAspect - oldAspect) / oldAspect > 0.1f
         // Frames made before the corners option existed (or after it changed) on Android 8-11.
         val cornersChanged = (cutter == null && cutsCorners(scaleMode, roundCorners, zoom)) != WidgetStore.getFramesRounded(context, appWidgetId)
-        if (!sizeChanged && !shapeChanged && !cornersChanged && !cutterChanged && !zoomChanged) return false
+        if (!sizeChanged && !shapeChanged && !cornersChanged && !cutterChanged && !zoomChanged && !spinChanged) return false
 
         return try {
             val frames = make(
-                context, appWidgetId, master, scaleMode, WidgetStore.getCropCenter(context, appWidgetId), roundCorners, cutter, zoom
+                context, appWidgetId, master, scaleMode, WidgetStore.getCropCenter(context, appWidgetId), roundCorners, cutter, zoom, spinSeconds
             )
             WidgetStore.saveGif(context, appWidgetId, gif.copy(frames = frames))
             GifWidgetProvider.updateWidget(context, AppWidgetManager.getInstance(context), appWidgetId)

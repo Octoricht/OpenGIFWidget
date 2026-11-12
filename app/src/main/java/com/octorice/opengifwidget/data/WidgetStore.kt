@@ -96,14 +96,33 @@ object WidgetStore {
     }
 
     fun saveFramesFit(
-        context: Context, appWidgetId: Int, sidePx: Int, aspect: Float, rounded: Boolean, shapeId: String?, zoom: Float?
+        context: Context, appWidgetId: Int, sidePx: Int, aspect: Float, rounded: Boolean, shapeId: String?, zoom: Float?,
+        spin: Float?
     ) {
         prefs(context).edit {
+            if (spin == null) remove("fit_spin_$appWidgetId") else putFloat("fit_spin_$appWidgetId", spin)
             if (zoom == null) remove("fit_zoom_$appWidgetId") else putFloat("fit_zoom_$appWidgetId", zoom)
             putInt("fit_px_$appWidgetId", sidePx)
             putFloat("fit_aspect_$appWidgetId", aspect)
             putBoolean("fit_round_$appWidgetId", rounded)
             if (shapeId == null) remove("fit_shape_$appWidgetId") else putString("fit_shape_$appWidgetId", shapeId)
+        }
+    }
+
+    /** The spin (seconds per turn) the current frames were made with, or null if they don't spin. */
+    fun getFramesSpin(context: Context, appWidgetId: Int): Float? =
+        prefs(context).let { if (it.contains("fit_spin_$appWidgetId")) it.getFloat("fit_spin_$appWidgetId", 4f) else null }
+
+    /**
+     * "Make the CD spin": seconds per turn, or null when off. Only used with a shape that can spin
+     * (see WidgetShape.spins); other shapes ignore it.
+     */
+    fun getSpin(context: Context, appWidgetId: Int): Float? =
+        prefs(context).let { if (it.contains("spin_$appWidgetId")) it.getFloat("spin_$appWidgetId", 4f) else null }
+
+    fun saveSpin(context: Context, appWidgetId: Int, secondsPerTurn: Float?) {
+        prefs(context).edit {
+            if (secondsPerTurn == null) remove("spin_$appWidgetId") else putFloat("spin_$appWidgetId", secondsPerTurn)
         }
     }
 

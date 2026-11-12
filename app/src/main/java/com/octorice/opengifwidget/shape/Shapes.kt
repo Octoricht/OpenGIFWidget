@@ -41,6 +41,9 @@ open class WidgetShape(
         return path
     }
 
+    /** True for shapes the picture can spin under (the CD): the editor then offers "Make the CD spin". */
+    open val spins: Boolean get() = false
+
     /** False for shapes made from a picture: those are drawn from [renderMask] only. */
     open val hasOutline: Boolean get() = true
 
@@ -176,6 +179,39 @@ class DotsPattern(
                 }
             }
         }
+    }
+}
+
+/**
+ * A round shape made of rings, each with its own opacity (1 = the picture shows fully, 0 = cut,
+ * in between = partly see-through). [rings]: (outer radius as a fraction of the shape's radius,
+ * opacity), from the outside in; each ring covers what's under it, down to the next one.
+ * Drawn from its mask (no single outline), so Reposition dims with the mask and the icon is the mask.
+ */
+class RingsShape(
+    id: String,
+    @StringRes nameRes: Int,
+    private val rings: List<Pair<Float, Float>>,
+    private val canSpin: Boolean = false
+) : WidgetShape(id, nameRes, aspect = 1f, drawUnit = { addOval(0f, 0f, 1f, 1f, Path.Direction.CW) }) {
+
+    override val hasOutline: Boolean get() = false
+    override val spins: Boolean get() = canSpin
+
+    override fun renderMask(width: Int, height: Int): Bitmap {
+        val mask = createBitmap(width.coerceAtLeast(1), height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(mask)
+        // SRC: a ring replaces what's under it (so a 25% ring inside a 100% one really is 25%).
+        // Anti-aliased, so every edge is soft.
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC) }
+        val cx = mask.width / 2f
+        val cy = mask.height / 2f
+        val radius = min(mask.width, mask.height) / 2f
+        for ((edge, opacity) in rings) {
+            paint.color = Color.argb((opacity * 255).roundToInt(), 255, 255, 255)
+            canvas.drawCircle(cx, cy, edge * radius, paint)
+        }
+        return mask
     }
 }
 
@@ -356,9 +392,29 @@ object Shapes {
         floatArrayOf(radius, radius, 0f, 0f, radius, radius, 0f, 0f)
     }
 
+    /**
+     * A game disc, measured on real ones (fractions of the disc's radius): a thin clear plastic rim,
+     * the solid printed label, a clear plastic hub around the hole with the raised stacking ring in it,
+     * the slightly frosted lip of the hole, and the hole itself.
+     * The clear parts are partly see-through, so the widget's background shows through like plastic.
+     */
+    val CD = RingsShape(
+        "cd", R.string.shape_cd,
+        listOf(
+            1.000f to 0.40f, // clear outer rim
+            0.985f to 1.00f, // printed label
+            0.220f to 0.25f, // clear hub
+            0.190f to 0.55f, // stacking ring
+            0.175f to 0.25f, // clear hub
+            0.150f to 0.55f, // lip of the hole
+            0.135f to 0.00f  // center hole (a bit bigger than a real disc's, chosen by the user)
+        ),
+        canSpin = true
+    )
+
     /** In the order the editor shows them (after "None"). */
     val all: List<WidgetShape> =
-        listOf(CIRCLE, HEART, STAR, CHONKY_STAR, SPARKLE, SCALLOP, CLOVER, FLOWER, BURST, DOTS, ARCH, MOON, LEAF)
+        listOf(CIRCLE, HEART, STAR, CHONKY_STAR, SPARKLE, SCALLOP, CLOVER, FLOWER, BURST, DOTS, ARCH, MOON, LEAF, CD)
 
     /**
      * Fits a drawing into the 1 x 1 square, centered, proportions kept. [items] are circles

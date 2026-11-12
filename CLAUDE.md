@@ -57,6 +57,18 @@ RemoteViews can't play GIFs directly, so:
   (5 petals) = overlapping same-direction circles (`circles()`, joined by the non-zero fill rule); Burst = 14 sharp points.
   `Fit` centers any drawing in the unit square. Moon (`moonOutline`): circle minus an offset circle (upper left), each tip rounded by a
   tiny circle touching both edges (user's "3. Fatter": offset 0.72, cut 0.86).
+  CD (`RingsShape`): concentric rings with their own opacity, drawn with SRC so each ring replaces the one under it
+  (measured on real PS5 discs: clear rim 0.985-1 at 40%, label to 0.22 solid, clear hub 25% with a 55% stacking ring at
+  0.175-0.19, 55% hole lip 0.135-0.15, hole 0.135 cut: a bit bigger than real, chosen by the user).
+  - Spin ("Make the CD spin", only shapes with `spins` = true, i.e. the CD): baked into the frames (`gif/Spin.kt`,
+    `deriveWidgetFrames(spin=...)`): the picture is rotated around the box center before the mask is applied (the disc
+    stays still). Still pictures become a loop of one turn; animations are repeated until about one turn fits (or hold
+    several whole turns), so the loop always ends on whole turns. Up to 15 fps for the spin (never above the FPS cap,
+    at least the animation's own rate), max 150 frames; the RAM budget then shrinks frames. `spin_<id>` = seconds per
+    turn (null = off; choices 12..1 s, default 4), `fit_spin_<id>` = what the frames were made with (`WidgetFrames.spinFor`
+    ignores spin for shapes that can't spin). The playback speed slider also speeds up the spin. Editor: a switch under
+    the Shape row only for the CD, and a speed slider only once it's on (`SpinControls`); the preview spins live
+    (`Modifier.spinning`, rotation inside the shape's mask). Mask-only (`hasOutline` = false), so partial transparency shows everywhere.
   - Patterns (`DotsPattern`, the "Dots" shape: 3x3-style grid of slightly overlapping dots, user's "2. Stuck together"):
     the dots keep ~56 dp; a bigger widget gets more dots, not bigger ones. `WidgetShape.forSize(dp)` returns the sized shape
     (`dots@6x3`, aspect = grid's, cached per grid) and `base` the picked one. ALWAYS resolve with
