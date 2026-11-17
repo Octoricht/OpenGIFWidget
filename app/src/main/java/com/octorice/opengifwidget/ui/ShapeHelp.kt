@@ -78,7 +78,7 @@ fun ShapeHelpLink(onClick: () -> Unit, modifier: Modifier = Modifier) {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ShapeHelpSheet(onClose: () -> Unit) {
+fun ShapeHelpSheet(onClose: () -> Unit, onTryIt: (() -> Unit)? = null) {
     // The pretend GIF's colors slide along slowly, forever.
     val phase by rememberInfiniteTransition(label = "gif").animateFloat(
         initialValue = 0f,
@@ -168,6 +168,31 @@ fun ShapeHelpSheet(onClose: () -> Unit) {
                 )
             }
 
+            // Try it yourself: the real black and white picture, turned into a shape with the real steps.
+            if (onTryIt != null) {
+                Spacer(Modifier.height(24.dp))
+                Text(stringResource(R.string.shape_help_try_title), style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.shape_help_try_text),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.foundation.Image(
+                        androidx.compose.ui.res.painterResource(R.drawable.tutorial_cat),
+                        contentDescription = stringResource(R.string.shape_help_try_picture),
+                        modifier = Modifier
+                            .size(96.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                    )
+                    Spacer(Modifier.width(16.dp))
+                    androidx.compose.material3.Button(onClick = onTryIt, modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.shape_help_try_button), textAlign = TextAlign.Center)
+                    }
+                }
+            }
             Spacer(Modifier.height(16.dp))
             TextButton(onClick = onClose, modifier = Modifier.align(Alignment.End)) {
                 Text(stringResource(R.string.shape_help_got_it))

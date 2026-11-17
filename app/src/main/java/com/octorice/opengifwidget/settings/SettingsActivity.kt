@@ -265,6 +265,7 @@ private fun YourShapes() {
     val scope = rememberCoroutineScope()
     val library = rememberShapeLibrary()
     var adding by remember { mutableStateOf(false) }
+    var addingTutorial by remember { mutableStateOf(false) } // "Try it yourself" from the guide
     var viewing by remember { mutableStateOf<CustomShape?>(null) }
     var confirming by remember { mutableStateOf<Pair<CustomShape, Int>?>(null) } // shape + widgets using it
     var deleting by remember { mutableStateOf(false) }
@@ -276,7 +277,15 @@ private fun YourShapes() {
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
     ShapeHelpLink(onClick = { showHelp = true })
-    if (showHelp) ShapeHelpSheet(onClose = { showHelp = false })
+    if (showHelp) {
+        ShapeHelpSheet(
+            onClose = { showHelp = false },
+            onTryIt = {
+                showHelp = false
+                addingTutorial = true
+            }
+        )
+    }
     ShapeLibraryGrid(
         shapes = library.shapes,
         selected = null,
@@ -285,7 +294,16 @@ private fun YourShapes() {
         onAdd = { adding = true }
     )
 
-    AddShapeDialogs(open = adding, onClose = { adding = false }, onAdded = { library.reload() })
+    AddShapeDialogs(
+        open = adding || addingTutorial,
+        tutorial = addingTutorial,
+        tutorialDoneText = stringResource(R.string.tutorial_done_settings),
+        onClose = {
+            adding = false
+            addingTutorial = false
+        },
+        onAdded = { library.reload() }
+    )
 
     // A shape, bigger, with Delete.
     viewing?.let { shape ->

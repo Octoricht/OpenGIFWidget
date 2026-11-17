@@ -141,6 +141,11 @@ RemoteViews can't play GIFs directly, so:
     separate boxes: pictures without transparency FIRST (darkness decides: black + gray examples in the same box), then
     transparent pictures. No tips section. Drawn in code (no image files); the
     pretend GIF is a moving gradient. Wording: say "transparent", never "see-through". Keep it uncluttered (no extra examples).
+  - Tutorial ("Try it yourself!" at the end of the guide): shows the built-in black-and-white cat
+    (`drawable-nodpi/tutorial_cat.png`, 512 px, user-approved drawing: wide "mochi" head, tall rounded ears, no eyes) and runs
+    the REAL add steps on it (`CustomShapes.makeMaskFromPicture`, same rules as a picked picture) in `AddShapeDialogs`'
+    tutorial mode: "Making your shape" (kept up ~1.2 s so it's seen) + hint, preview + hint, Use this shape, then
+    "Your cat shape is ready!" saying where it went (editor: on the preview, Save to keep it; Settings: in every Shape row).
   - Shapes over the checkerboard (`MaskPreview`, the guide's cutter) use a DARK theme shade (primaryContainer when the
     accent is light), so they never blend into the white/gray checkerboard.
   - Delete (`CustomShapes.delete`): confirm (says how many widgets use it), PNG removed, each user widget: `saveShape(null)`

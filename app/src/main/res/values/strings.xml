@@ -226,6 +226,15 @@
     <string name="shape_help_black_text">Black is the shape, white is cut away. In color photos, the dark parts become the shape.</string>
     <string name="shape_help_gray_text">Gray is half transparent, so your picture fades out softly there.</string>
     <string name="shape_help_got_it">Got it</string>
+    <string name="shape_help_try_title">Try it yourself!</string>
+    <string name="shape_help_try_text">Here\'s a black and white picture of a cat. Let\'s turn it into a shape, just like you would with your own picture.</string>
+    <string name="shape_help_try_picture">A black cat head on white</string>
+    <string name="shape_help_try_button">Make a shape from this cat</string>
+    <string name="tutorial_making_hint">The app is looking at the picture: the black cat stays, the white around it gets cut away.</string>
+    <string name="tutorial_preview_hint">Here\'s your cutter! The black cat became the shape, and the white around it was cut away (the checkered part). Tap Use this shape to keep it.</string>
+    <string name="tutorial_done_title">Your cat shape is ready!</string>
+    <string name="tutorial_done_editor">It\'s on your widget\'s preview now. Tap Save to put it on your home screen. You\'ll always find it in the Shape row.</string>
+    <string name="tutorial_done_settings">You\'ll find it in every widget\'s Shape row. Now try it with your own pictures!</string>
     <string name="shapes_add_from">Pick a picture for your shape.</string>
     <string name="shapes_making">Making your shape…</string>
     <string name="shapes_preview_title">Your new shape</string>

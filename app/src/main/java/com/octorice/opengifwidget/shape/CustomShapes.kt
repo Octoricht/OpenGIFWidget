@@ -120,7 +120,22 @@ object CustomShapes {
     }
 
     /**
-     * The mask of a picture: its see-through parts if it has any, otherwise its darkness (black =
+     * Like [makeMask], for a picture built into the app ([resId], e.g. the tutorial's cat): the same
+     * steps (transparency or darkness, trimming, shrinking), so it works exactly like a picked one.
+     */
+    fun makeMaskFromPicture(context: Context, @androidx.annotation.DrawableRes resId: Int): Bitmap = friendlyErrors {
+        val options = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+        val picture = BitmapFactory.decodeResource(context.resources, resId, options)
+            ?: throw ImportException(R.string.error_unsupported)
+        try {
+            maskFrom(picture)
+        } finally {
+            picture.recycle()
+        }
+    }
+
+    /**
+     * The mask of a picture: its transparent parts if it has any, otherwise its darkness (black =
      * the picture shows, white = cut, gray = partly). Empty (fully cut) borders are trimmed so the
      * shape fills the widget, and it's shrunk to about 512 px, keeping its proportions.
      */

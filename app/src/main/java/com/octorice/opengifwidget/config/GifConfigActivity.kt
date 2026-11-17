@@ -773,6 +773,7 @@ private fun EditorScreen(
     // "+" at the end of the Shape row: add a new shape to your library, then use it here.
     AddShapeDialogs(
         open = addingShape,
+        tutorialDoneText = stringResource(R.string.tutorial_done_editor),
         onClose = { addingShape = false },
         onAdded = { added ->
             library.reload()

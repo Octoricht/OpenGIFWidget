@@ -34,6 +34,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import kotlinx.coroutines.delay
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.BlendMode
@@ -134,25 +137,65 @@ private sealed interface AddStep {
     data object Working : AddStep                    // turning the picture into a mask
     data class Preview(val mask: Bitmap) : AddStep   // "Use this shape" / "Cancel"
     data class Failed(val message: String) : AddStep
+    data object TutorialDone : AddStep               // tutorial only: "Your cat shape is ready!"
 }
 
 /**
  * The "Add new shape" steps, as dialogs: pick a picture (Gallery or Files), it's turned into a
  * mask, you see how it will cut, then "Use this shape" saves it to the library ([onAdded]).
  * Shown while [open]; [onClose] when done or cancelled.
+ *
+ * Tutorial ([tutorial], or "Try it yourself" in the guide): the very same steps, run on the cat
+ * picture built into the app instead of a picked one, with a short hint at each step and a last
+ * "Your cat shape is ready!" saying where it went ([tutorialDoneText], which depends on the screen).
  */
 @Composable
-fun AddShapeDialogs(open: Boolean, onClose: () -> Unit, onAdded: (CustomShape) -> Unit) {
+fun AddShapeDialogs(
+    open: Boolean,
+    onClose: () -> Unit,
+    onAdded: (CustomShape) -> Unit,
+    tutorialDoneText: String,
+    tutorial: Boolean = false
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var step by remember { mutableStateOf<AddStep>(AddStep.Choose) }
     var showHelp by remember { mutableStateOf(false) }
-    LaunchedEffect(open) { if (open) step = AddStep.Choose }
+    var inTutorial by remember { mutableStateOf(false) }
 
     fun close() {
         (step as? AddStep.Preview)?.mask?.recycle()
         step = AddStep.Choose
+        inTutorial = false
         onClose()
+    }
+
+    // Turns a picture into a mask in the background, then shows the preview (or a friendly error).
+    fun make(work: () -> Bitmap) {
+        step = AddStep.Working
+        scope.launch {
+            val started = System.currentTimeMillis()
+            step = try {
+                val mask = withContext(Dispatchers.IO) { work() }
+                // In the tutorial, let "Making your shape" be seen for a moment: it's one of the steps.
+                if (inTutorial) delay((1200 - (System.currentTimeMillis() - started)).coerceAtLeast(0))
+                AddStep.Preview(mask)
+            } catch (e: IOException) {
+                AddStep.Failed(e.friendlyMessage(context))
+            }
+        }
+    }
+
+    fun startTutorial() {
+        inTutorial = true
+        make { CustomShapes.makeMaskFromPicture(context, R.drawable.tutorial_cat) }
+    }
+
+    LaunchedEffect(open) {
+        if (open) {
+            step = AddStep.Choose
+            if (tutorial) startTutorial()
+        }
     }
 
     fun onPicked(uri: android.net.Uri?) {
@@ -160,23 +203,23 @@ fun AddShapeDialogs(open: Boolean, onClose: () -> Unit, onAdded: (CustomShape) -
             close() // closed the picker without choosing
             return
         }
-        step = AddStep.Working
-        scope.launch {
-            step = try {
-                AddStep.Preview(withContext(Dispatchers.IO) { CustomShapes.makeMask(context, uri) })
-            } catch (e: IOException) {
-                AddStep.Failed(e.friendlyMessage(context))
-            }
-        }
+        make { CustomShapes.makeMask(context, uri) }
     }
 
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { onPicked(it) }
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { onPicked(it) }
 
     if (!open) return
-    // The guide replaces the "Add new shape" dialog while it's open; closing it comes back here.
+    // The guide replaces the "Add new shape" dialog while it's open; closing it comes back here,
+    // and "Try it yourself" runs the tutorial right here.
     if (showHelp) {
-        ShapeHelpSheet(onClose = { showHelp = false })
+        ShapeHelpSheet(
+            onClose = { showHelp = false },
+            onTryIt = {
+                showHelp = false
+                startTutorial()
+            }
+        )
         return
     }
     when (val current = step) {
@@ -208,10 +251,13 @@ fun AddShapeDialogs(open: Boolean, onClose: () -> Unit, onAdded: (CustomShape) -
             properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
             confirmButton = {},
             text = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.size(28.dp))
-                    Spacer(Modifier.width(16.dp))
-                    Text(stringResource(R.string.shapes_making))
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(Modifier.size(28.dp))
+                        Spacer(Modifier.width(16.dp))
+                        Text(stringResource(R.string.shapes_making))
+                    }
+                    if (inTutorial) TutorialHint(stringResource(R.string.tutorial_making_hint))
                 }
             }
         )
@@ -223,6 +269,7 @@ fun AddShapeDialogs(open: Boolean, onClose: () -> Unit, onAdded: (CustomShape) -
                     Text(stringResource(R.string.shapes_preview_text))
                     Spacer(Modifier.height(12.dp))
                     MaskPreview(current.mask, Modifier.size(220.dp))
+                    if (inTutorial) TutorialHint(stringResource(R.string.tutorial_preview_hint))
                 }
             },
             confirmButton = {
@@ -231,9 +278,13 @@ fun AddShapeDialogs(open: Boolean, onClose: () -> Unit, onAdded: (CustomShape) -
                         try {
                             val shape = withContext(Dispatchers.IO) { CustomShapes.save(context, current.mask) }
                             current.mask.recycle()
-                            step = AddStep.Choose
                             onAdded(shape)
-                            onClose()
+                            if (inTutorial) {
+                                step = AddStep.TutorialDone // one last word on where the shape went
+                            } else {
+                                step = AddStep.Choose
+                                onClose()
+                            }
                         } catch (e: IOException) {
                             step = AddStep.Failed(e.friendlyMessage(context))
                         }
@@ -246,6 +297,30 @@ fun AddShapeDialogs(open: Boolean, onClose: () -> Unit, onAdded: (CustomShape) -
             onDismissRequest = ::close,
             text = { Text(current.message) },
             confirmButton = { TextButton(onClick = ::close) { Text(stringResource(R.string.shapes_close)) } }
+        )
+        AddStep.TutorialDone -> AlertDialog(
+            onDismissRequest = ::close,
+            title = { Text(stringResource(R.string.tutorial_done_title)) },
+            text = { Text(tutorialDoneText) },
+            confirmButton = { TextButton(onClick = ::close) { Text(stringResource(R.string.shape_help_got_it)) } }
+        )
+    }
+}
+
+/** A tutorial hint: a small highlighted note under a step, saying what's happening and what to do. */
+@Composable
+private fun TutorialHint(text: String) {
+    Spacer(Modifier.height(12.dp))
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier = Modifier.padding(12.dp)
         )
     }
 }
