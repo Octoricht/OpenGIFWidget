@@ -140,7 +140,8 @@ RemoteViews can't play GIFs directly, so:
     card (Pinterest first; search words "shape", "shape stencil", "silhouette", never "sticker"), then the two kinds in two
     separate boxes: pictures without transparency FIRST (darkness decides: black + gray examples in the same box), then
     transparent pictures. No tips section. Drawn in code (no image files); the
-    pretend GIF is a moving gradient. Wording: say "transparent", never "see-through". Keep it uncluttered (no extra examples).
+    pretend GIF is a moving gradient. A NestedScrollConnection takes all leftover scroll/fling, so flicking the guide never closes
+    the sheet (it used to close on a fast flick back to the top). Wording: say "transparent", never "see-through". Keep it uncluttered (no extra examples).
   - Tutorial ("Try it yourself!" at the end of the guide): shows the built-in black-and-white cat
     (`drawable-nodpi/tutorial_cat.png`, 512 px, user-approved drawing: wide "mochi" head, tall rounded ears, no eyes) and runs
     the REAL add steps on it (`CustomShapes.makeMaskFromPicture`, same rules as a picked picture) in `AddShapeDialogs`'

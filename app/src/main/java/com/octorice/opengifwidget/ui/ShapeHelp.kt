@@ -33,6 +33,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -90,10 +95,21 @@ fun ShapeHelpSheet(onClose: () -> Unit, onTryIt: (() -> Unit)? = null) {
     val colors = MaterialTheme.colorScheme
     val cutterColor = if (colors.primary.luminance() > 0.4f) colors.primaryContainer else colors.primary
 
+    // Scrolling the guide must never move the sheet: a quick flick back to the top used to pass its
+    // leftover speed on to the sheet, which closed it. This takes whatever the text didn't use.
+    // (The handle at the top, Back, tapping outside and "Got it" still close it.)
+    val keepOpen = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource) = available
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity) = available
+        }
+    }
+
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(
             Modifier
                 .fillMaxWidth()
+                .nestedScroll(keepOpen)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 16.dp)
