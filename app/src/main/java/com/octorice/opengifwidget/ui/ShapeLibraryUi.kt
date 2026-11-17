@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -98,11 +99,17 @@ fun ShapeLibraryGrid(
     }
 }
 
-/** A mask drawn in [MaterialTheme]'s main color over a checkerboard (the checkered parts get cut away). */
+/**
+ * A mask drawn in a dark shade of the theme's color over a checkerboard (the checkered parts get
+ * cut away). The checkerboard is always white and light gray, so the color must be dark in both
+ * themes: in dark mode the accent color is light (it would blend in), so its deep "container"
+ * shade is used instead.
+ */
 @Composable
 fun MaskPreview(mask: Bitmap, modifier: Modifier = Modifier) {
     val image = remember(mask) { mask.asImageBitmap() }
-    val color = MaterialTheme.colorScheme.primary
+    val colors = MaterialTheme.colorScheme
+    val color = if (colors.primary.luminance() > 0.4f) colors.primaryContainer else colors.primary
     Box(modifier.clip(RoundedCornerShape(12.dp))) {
         Checkerboard()
         Canvas(Modifier.fillMaxSize()) {
@@ -139,6 +146,7 @@ fun AddShapeDialogs(open: Boolean, onClose: () -> Unit, onAdded: (CustomShape) -
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var step by remember { mutableStateOf<AddStep>(AddStep.Choose) }
+    var showHelp by remember { mutableStateOf(false) }
     LaunchedEffect(open) { if (open) step = AddStep.Choose }
 
     fun close() {
@@ -166,6 +174,11 @@ fun AddShapeDialogs(open: Boolean, onClose: () -> Unit, onAdded: (CustomShape) -
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { onPicked(it) }
 
     if (!open) return
+    // The guide replaces the "Add new shape" dialog while it's open; closing it comes back here.
+    if (showHelp) {
+        ShapeHelpSheet(onClose = { showHelp = false })
+        return
+    }
     when (val current = step) {
         AddStep.Choose -> AlertDialog(
             onDismissRequest = ::close,
@@ -173,12 +186,7 @@ fun AddShapeDialogs(open: Boolean, onClose: () -> Unit, onAdded: (CustomShape) -
             text = {
                 Column {
                     Text(stringResource(R.string.shapes_add_from))
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        stringResource(R.string.shapes_library_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    ShapeHelpLink(onClick = { showHelp = true })
                 }
             },
             confirmButton = {

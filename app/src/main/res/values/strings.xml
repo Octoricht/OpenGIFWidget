@@ -204,9 +204,28 @@
     <string name="editor_spin_speed">Spin speed: one turn every %1$s s</string>
     <string name="shape_custom">Your shape</string>
     <string name="shapes_library_title">Your shapes</string>
-    <string name="shapes_library_description">Turn any picture into a shape. See-through parts are cut away. Pictures without see-through parts use their dark parts: black is the shape, white is cut away, gray is half see-through.</string>
     <string name="shapes_library_empty">No shapes yet.</string>
     <string name="shapes_add">Add new shape</string>
+    <string name="shapes_library_short">Turn any picture into a shape for your widgets.</string>
+    <!-- "How does this work?" guide for making your own shapes -->
+    <string name="shape_help_link">How does this work?</string>
+    <string name="shape_help_title">Making your own shapes</string>
+    <string name="shape_help_intro">Any picture can become a cookie cutter for your widgets.</string>
+    <string name="shape_help_step_pick">Pick a picture</string>
+    <string name="shape_help_step_cutter">It becomes a cutter</string>
+    <string name="shape_help_step_widget">Your GIF shows inside</string>
+    <string name="shape_help_find_title">Where do I find shapes?</string>
+    <string name="shape_help_find_text">You don\'t have to draw anything! Pinterest is full of them: search for \"shape\", \"shape stencil\" or \"silhouette\". Any picture from Google Images or your gallery works too.</string>
+    <string name="shape_help_examples_title">Which part becomes the shape?</string>
+    <string name="shape_help_examples_intro">It depends on the kind of picture. The app checks it for you.</string>
+    <string name="shape_help_transparent_title">Pictures with transparent parts</string>
+    <string name="shape_help_transparent_text">Like stickers and PNGs: the transparent parts decide.</string>
+    <string name="shape_help_transparent_example">The transparent parts are cut away, everything else is the shape.</string>
+    <string name="shape_help_dark_title">Pictures without transparency</string>
+    <string name="shape_help_dark_text">Like drawings and photos: how dark each part is decides.</string>
+    <string name="shape_help_black_text">Black is the shape, white is cut away. In color photos, the dark parts become the shape.</string>
+    <string name="shape_help_gray_text">Gray is half transparent, so your picture fades out softly there.</string>
+    <string name="shape_help_got_it">Got it</string>
     <string name="shapes_add_from">Pick a picture for your shape.</string>
     <string name="shapes_making">Making your shape…</string>
     <string name="shapes_preview_title">Your new shape</string>
@@ -222,7 +241,7 @@
         <item quantity="other">It\'s used by %d widgets. They\'ll go back to no shape.</item>
     </plurals>
     <string name="shapes_deleted">Shape deleted</string>
-    <string name="error_shape_empty">This picture is completely white or see-through, so it can\'t cut anything.</string>
+    <string name="error_shape_empty">This picture is completely white or transparent, so it can\'t cut anything.</string>
     <string name="editor_opacity">Opacity: %1$d%%</string>
     <string name="color_transparent">Transparent</string>
     <string name="color_custom">Custom color</string>

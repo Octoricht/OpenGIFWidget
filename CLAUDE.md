@@ -135,6 +135,14 @@ RemoteViews can't play GIFs directly, so:
     ("Add new shape", opens the add flow; the new shape is applied). Settings > "Your shapes": a grid in the same order; tap = bigger preview + Delete. Add flow (`AddShapeDialogs`): Gallery/Files ->
     "Making your shape" -> preview (shape in color over a checkerboard) -> "Use this shape" / "Cancel".
     Icons/thumbnails are the shape itself (`ShapeIcon`: outline, or the mask tinted).
+  - Guide (`ui/ShapeHelp.kt`, user-reviewed): a "How does this work?" link in the Add new shape dialog and in Settings >
+    Your shapes opens a bottom sheet: 3 steps (pick -> cutter -> your GIF inside), a highlighted "Where do I find shapes?"
+    card (Pinterest first; search words "shape", "shape stencil", "silhouette", never "sticker"), then the two kinds in two
+    separate boxes: pictures without transparency FIRST (darkness decides: black + gray examples in the same box), then
+    transparent pictures. No tips section. Drawn in code (no image files); the
+    pretend GIF is a moving gradient. Wording: say "transparent", never "see-through". Keep it uncluttered (no extra examples).
+  - Shapes over the checkerboard (`MaskPreview`, the guide's cutter) use a DARK theme shade (primaryContainer when the
+    accent is light), so they never blend into the white/gray checkerboard.
   - Delete (`CustomShapes.delete`): confirm (says how many widgets use it), PNG removed, each user widget: `saveShape(null)`
     + `refreshIfNeeded` (re-cut, old frames deleted; never RAM-limited) + redraw.
   - Reposition (`ZoomView`) dims outside a custom shape with its mask (DstOut on a layer), since there's no outline.

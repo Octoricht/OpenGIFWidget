@@ -66,6 +66,8 @@ import com.octorice.opengifwidget.shape.ShapeMask
 import com.octorice.opengifwidget.ui.AddShapeDialogs
 import com.octorice.opengifwidget.ui.MaskPreview
 import com.octorice.opengifwidget.ui.ShapeLibraryGrid
+import com.octorice.opengifwidget.ui.ShapeHelpLink
+import com.octorice.opengifwidget.ui.ShapeHelpSheet
 import com.octorice.opengifwidget.ui.rememberShapeLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
@@ -267,11 +269,14 @@ private fun YourShapes() {
     var confirming by remember { mutableStateOf<Pair<CustomShape, Int>?>(null) } // shape + widgets using it
     var deleting by remember { mutableStateOf(false) }
 
+    var showHelp by remember { mutableStateOf(false) }
     Text(
-        stringResource(R.string.shapes_library_description),
+        stringResource(R.string.shapes_library_short),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
+    ShapeHelpLink(onClick = { showHelp = true })
+    if (showHelp) ShapeHelpSheet(onClose = { showHelp = false })
     ShapeLibraryGrid(
         shapes = library.shapes,
         selected = null,
