@@ -118,6 +118,7 @@
 
     <!-- Home screen: removing a widget -->
     <string name="home_hint">Tap a widget to edit it. Long-press to remove it.</string>
+    <string name="home_updates_footer">OpenGIFWidget %1$s · Get updates</string>
     <string name="remove_title">Remove this widget?</string>
     <string name="remove_message">Apps can\'t take widgets off your home screen, only your launcher can. If this widget is on your home screen, long-press it there and choose Remove.\n\nIf it isn\'t (a leftover from a setup you cancelled), you can remove it from this list. Restarting your device also clears leftovers.</string>
     <string name="remove_confirm">Remove from list</string>
@@ -167,6 +168,9 @@
     <string name="about_donate_message">If you are enjoying the app, a small donation would mean a lot :) Octorice loves you either way &lt;3</string>
     <string name="about_donate_button">Support me on Ko-fi</string>
     <!-- Not shown as text, so it isn't translated. -->
+    <string name="about_updates_message">New versions come out on GitHub.</string>
+    <string name="about_updates_button">Get updates</string>
+    <string name="about_updates_url" translatable="false">https://github.com/Octoricht/OpenGIFWidget/releases</string>
     <string name="about_donate_url" translatable="false">https://ko-fi.com/octorice</string>
     <!-- The "..." is part of the joke, keep it as three dots. -->
     <string name="about_thanks" tools:ignore="TypographyEllipsis">Thank you for using my app, What yall snacking on ? UUUMMM...!</string>

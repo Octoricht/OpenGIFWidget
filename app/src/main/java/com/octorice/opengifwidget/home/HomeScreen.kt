@@ -306,6 +306,26 @@ private fun WidgetGrid(
                     .padding(top = 8.dp)
             )
         }
+        // A quiet footer: the version, and a link to new versions on GitHub (opens the browser;
+        // the app itself never goes online). People who installed once can find updates here.
+        item(span = StaggeredGridItemSpan.FullLine) {
+            val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+            val updatesUrl = stringResource(R.string.about_updates_url)
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                androidx.compose.material3.TextButton(onClick = {
+                    try {
+                        uriHandler.openUri(updatesUrl)
+                    } catch (e: Exception) {
+                        // No browser on this phone: nothing to open the link with.
+                    }
+                }) {
+                    Text(
+                        stringResource(R.string.home_updates_footer, com.octorice.opengifwidget.BuildConfig.VERSION_NAME),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+            }
+        }
     }
 }
 

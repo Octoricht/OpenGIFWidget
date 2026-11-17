@@ -194,6 +194,25 @@ private fun SettingsScreen(onBack: () -> Unit) {
                     textAlign = TextAlign.Center
                 )
 
+                // Updates: opens the GitHub releases page in the browser. The app has no internet
+                // permission and never checks by itself; this is just a link.
+                Text(
+                    stringResource(R.string.about_updates_message),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+                val updatesUrl = stringResource(R.string.about_updates_url)
+                OutlinedButton(onClick = {
+                    try {
+                        uriHandler.openUri(updatesUrl)
+                    } catch (e: Exception) {
+                        // No browser on this phone: nothing to open the link with.
+                    }
+                }) {
+                    Text(stringResource(R.string.about_updates_button))
+                }
+
                 // Donation: opens the Ko-fi page in the browser (the app itself never goes online).
                 Spacer(Modifier.height(4.dp))
                 Text(

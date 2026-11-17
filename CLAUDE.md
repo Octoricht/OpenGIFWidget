@@ -212,6 +212,9 @@ RemoteViews can't play GIFs directly, so:
   everything else scrolls underneath it. The editor's title bar is 48dp tall (not 64) to leave more room.
 - Layouts: main grid `StaggeredGridCells.Adaptive(170.dp)`, editor/Settings max width 640dp, trim dialog scrolls,
   no fixed heights around text. Widget preview: `drawable-nodpi/widget_preview.png` + `layout/widget_preview.xml`.
+- Main screen footer (under the widget cards): "OpenGIFWidget <version> · Get updates", same link as Settings > About.
+- Settings > About: "Get updates" opens the GitHub releases page in the browser (just a link; the app keeps NO internet
+  permission and never checks for updates itself: user's choice, also what F-Droid/IzzyOnDroid expect).
 - Settings > Reliability explains per-brand battery settings; opens ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS
   (no REQUEST_IGNORE_BATTERY_OPTIMIZATIONS permission: Play restricts it and the app doesn't need it).
 - Device tiers (`DeviceProfile`, by total RAM): LOW (<3.5 GB reported or isLowRamDevice) / MID (<7 GB) / HIGH.
