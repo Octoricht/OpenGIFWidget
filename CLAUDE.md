@@ -49,7 +49,8 @@ RemoteViews can't play GIFs directly, so:
   shown only on Android 8-11 in Fill without a shape (`WidgetSizes.needsRoundedFrames`). `fit_round_<id>` records whether the current
   frames are rounded; `WidgetFrames.refreshIfNeeded` remakes them when that doesn't match (fixes older widgets on app open).
 - Shapes ("cookie cutters", v1.1; `shape/Shapes.kt`): `WidgetShape(id, nameRes, aspect, path in a 0..1 unit square)`;
-  `Shapes.all` is the registry (adding a shape = one entry + its string). Now: Circle, Heart, Star, Chonky star (both from `roundedStar(inner, tipRound,
+  `Shapes.all` is the registry (adding a shape = one entry + its string); row order (user-approved groups): Circle, CD,
+  Heart, Star | Sparkle, Moon | Flower, Clover, Leaf, Chonky star | Scallop, Burst | Arch, Dots. Now: Circle, Heart, Star, Chonky star (both from `roundedStar(inner, tipRound,
   valleyRound)`: 5 corners each rounded with a quadratic curve, scaled to fill the unit square). Sparkle: a big slanted 4-point
   sparkle + a small one (`Shapes.Sparkle`: cubic sides bent toward each center, `FAT` = 0.32 chosen by the user); not square,
   its `aspect` (~1.2) comes from the drawing's bounds. Scallop: circle with 12 deep round bumps (depth 0.18)

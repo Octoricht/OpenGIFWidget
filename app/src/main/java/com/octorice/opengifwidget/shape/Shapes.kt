@@ -511,9 +511,18 @@ object Shapes {
         noise.recycle()
     }
 
-    /** In the order the editor shows them (after "None"). */
-    val all: List<WidgetShape> =
-        listOf(CIRCLE, HEART, STAR, CHONKY_STAR, SPARKLE, SCALLOP, CLOVER, FLOWER, BURST, DOTS, ARCH, MOON, LEAF, CD)
+    /**
+     * In the order the editor shows them (after "None"), grouped: favorites, sky and magic,
+     * cute and natural, badges, then the ones that fill the widget's shape.
+     * Only the order of the row: saved widgets refer to shapes by id, so reordering changes nothing for them.
+     */
+    val all: List<WidgetShape> = listOf(
+        CIRCLE, CD, HEART, STAR,         // favorites
+        SPARKLE, MOON,                   // sky and magic
+        FLOWER, CLOVER, LEAF, CHONKY_STAR, // cute and natural
+        SCALLOP, BURST,                  // badges
+        ARCH, DOTS                       // fill the widget's shape
+    )
 
     /**
      * Fits a drawing into the 1 x 1 square, centered, proportions kept. [items] are circles
