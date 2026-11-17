@@ -127,6 +127,7 @@ import com.octorice.opengifwidget.shape.WidgetShape
 import com.octorice.opengifwidget.shape.ShapeStyle
 import com.octorice.opengifwidget.shape.PixelSize
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.asComposePath
 import com.octorice.opengifwidget.ui.friendlyMessage
@@ -1597,18 +1598,30 @@ private fun ShapeTools(
                 selected = pixelOn,
                 onClick = { onPixelOn(!pixelOn) },
                 label = { Text(stringResource(R.string.editor_pixelify)) },
+                // A tiny picture of the effect (the label already says it, so no description).
+                leadingIcon = {
+                    Icon(painterResource(R.drawable.ic_pixel_edges), contentDescription = null, Modifier.size(FilterChipDefaults.IconSize))
+                },
                 enabled = enabled
             )
             FilterChip(
                 selected = halftoneOn,
                 onClick = { onHalftoneOn(!halftoneOn) },
                 label = { Text(stringResource(R.string.editor_halftone)) },
+                // A tiny picture of the effect (the label already says it, so no description).
+                leadingIcon = {
+                    Icon(painterResource(R.drawable.ic_halftone_edges), contentDescription = null, Modifier.size(FilterChipDefaults.IconSize))
+                },
                 enabled = enabled
             )
             FilterChip(
                 selected = reverse,
                 onClick = { onReverse(!reverse) },
                 label = { Text(stringResource(R.string.editor_reverse)) },
+                // A tiny picture of the effect (the label already says it, so no description).
+                leadingIcon = {
+                    Icon(painterResource(R.drawable.ic_reverse), contentDescription = null, Modifier.size(FilterChipDefaults.IconSize))
+                },
                 enabled = enabled
             )
         }

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Reverse: a rounded square with a round hole (the shape becomes a hole). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="M5.76,1.44h12.48a4.32,4.32 0,0 1,4.32,4.32v12.48a4.32,4.32 0,0 1,-4.32,4.32h-12.48a4.32,4.32 0,0 1,-4.32,-4.32v-12.48a4.32,4.32 0,0 1,4.32,-4.32zM12,12m-5.76,0a5.76,5.76 0,1 0,11.52,0a5.76,5.76 0,1 0,-11.52,0z" />
+</vector>

@@ -116,7 +116,8 @@ RemoteViews can't play GIFs directly, so:
   (in `fit_shape_<id>`, so tool changes and reversed resizes re-cut); `Shapes.byId` reads them (`StyledShape.fromId`).
   Stored: `shape_pixel_<id>` / `shape_halftone_<id>` (PixelSize name) and `shape_reverse_<id>`; kept even with no shape (toggles keep their
   state), only applied with a shape (`WidgetSizes.shapeFor(context, id, shape, style)`). Editor: `ShapeTools` row (three
-  FilterChips in a FlowRow, room for "Brush" later) shown only with a shape; the shared size choice appears once an
+  FilterChips in a FlowRow, each with a small icon of its effect: `ic_pixel_edges` / `ic_halftone_edges` = a rounded corner
+  as pixels / dots, `ic_reverse` = a square with a round hole; room for "Brush" later) shown only with a shape; the shared size choice appears once an
   edge style is on.
 - Custom shapes (v1.1, `shape/CustomShapes.kt`, `ui/ShapeLibraryUi.kt`): any picture becomes a cutter. A shape either draws
   its outline (`WidgetShape.path`, `hasOutline`) or supplies a mask picture (`renderMask`); `ShapeMask.render` calls
