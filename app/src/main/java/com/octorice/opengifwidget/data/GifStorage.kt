@@ -21,6 +21,14 @@ data class ImportedFile(val name: String, val sizeBytes: Long, val isGif: Boolea
 
 object GifStorage {
 
+    private val lastVersion = java.util.concurrent.atomic.AtomicLong(0L)
+
+    /**
+     * A new frame folder name: the current time in ms, but always bigger than the last one handed out,
+     * so pictures added in the same millisecond (a slideshow imports several at once) never share a folder.
+     */
+    fun newVersion(): Long = lastVersion.updateAndGet { last -> maxOf(last + 1, System.currentTimeMillis()) }
+
     /** Biggest picture or GIF we accept. */
     private const val MAX_FILE_BYTES = 50_000_000L // "50 MB" as Android displays sizes
     /** Biggest video we accept. Videos are read in place (never copied), so this can be large. */

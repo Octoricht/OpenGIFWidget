@@ -1,7 +1,6 @@
 package com.octorice.opengifwidget.shape
 
 import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -200,8 +199,7 @@ object CustomShapes {
 
     /** The widgets (on the home screen) that use this shape. */
     fun usedBy(context: Context, shape: CustomShape): List<Int> =
-        AppWidgetManager.getInstance(context)
-            .getAppWidgetIds(ComponentName(context, GifWidgetProvider::class.java))
+        GifWidgetProvider.allWidgetIds(context)
             .filter { WidgetStore.getShapeId(context, it) == shape.id }
 
     /**

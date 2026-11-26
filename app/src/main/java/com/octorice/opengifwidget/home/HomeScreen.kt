@@ -1,5 +1,12 @@
 package com.octorice.opengifwidget.home
 
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.SizeTransform
+import androidx.activity.compose.BackHandler
 import android.text.format.Formatter
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -104,6 +111,7 @@ fun HomeScreen(
     var showHowToAdd by remember { mutableStateOf(false) }
     var toRemove by remember { mutableStateOf<WidgetSummary?>(null) } // long-pressed card
     var showHealth by remember { mutableStateOf(false) } // the panel behind the header
+    var addMenuOpen by remember { mutableStateOf(false) } // "Add widget" split into its two choices
 
     // Read again whenever the screen comes back (e.g. after changing it in Settings).
     var fpsCap by remember(refreshKey) { mutableIntStateOf(AppSettings.getFpsCap(context)) }
@@ -121,13 +129,17 @@ fun HomeScreen(
     LaunchedEffect(refreshKey) { reload() }
 
     val pinConfirmMessage = stringResource(R.string.home_pin_confirm)
-    val onAddWidget: () -> Unit = {
-        if (HomeData.requestPinWidget(context)) {
+    val onAddWidget: (slideshow: Boolean) -> Unit = { slideshow ->
+        addMenuOpen = false
+        if (HomeData.requestPinWidget(context, slideshow)) {
             scope.launch { snackbarHostState.showSnackbar(pinConfirmMessage) }
         } else {
             showHowToAdd = true // This launcher can't place widgets for us.
         }
     }
+
+    // Back closes the two choices first, instead of leaving the app.
+    BackHandler(enabled = addMenuOpen) { addMenuOpen = false }
 
     // Makes the big title shrink smoothly into a normal top bar as you scroll.
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -154,10 +166,10 @@ fun HomeScreen(
             }
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onAddWidget,
-                icon = { Icon(painterResource(R.drawable.ic_add), contentDescription = null) },
-                text = { Text(stringResource(R.string.home_add_widget)) }
+            AddWidgetButton(
+                open = addMenuOpen,
+                onOpen = { addMenuOpen = true },
+                onPick = onAddWidget
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -184,6 +196,14 @@ fun HomeScreen(
                     onLongPress = { toRemove = it }
                 )
             }
+        }
+        // While the two choices are showing, a tap anywhere else just closes them.
+        if (addMenuOpen) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) { detectTapGestures { addMenuOpen = false } }
+            )
         }
     }
 
@@ -374,7 +394,7 @@ private fun WidgetCard(
                         FrameImage(image, ScaleMode.FIT, { Offset(0.5f, 0.5f) }, Modifier.fillMaxSize())
                     }
                 } else {
-                    FrameImage(image, if (widget.zoomed) ScaleMode.FIT else widget.scaleMode, { Offset(0.5f, 0.5f) }, Modifier.fillMaxSize())
+                    FrameImage(image, if (widget.zoomed || widget.slideshow) ScaleMode.FIT else widget.scaleMode, { Offset(0.5f, 0.5f) }, Modifier.fillMaxSize())
                 }
                 ModeBadge(
                     widget.scaleMode,
@@ -412,6 +432,12 @@ private fun WidgetCard(
             Text(
                 when {
                     frames == null -> stringResource(R.string.widget_tap_to_choose)
+                    widget.slideshow -> pluralStringResource(
+                        R.plurals.home_card_pictures,
+                        frames.frameCount,
+                        frames.frameCount,
+                        Formatter.formatShortFileSize(context, widget.storageBytes)
+                    )
                     frames.frameCount == 1 -> stringResource(
                         R.string.home_card_still,
                         Formatter.formatShortFileSize(context, widget.storageBytes)
@@ -474,7 +500,7 @@ private fun ModeBadge(mode: ScaleMode, zoomed: Boolean, modifier: Modifier = Mod
 }
 
 @Composable
-private fun EmptyState(onAddWidget: () -> Unit) {
+private fun EmptyState(onAddWidget: (slideshow: Boolean) -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -505,6 +531,57 @@ private fun EmptyState(onAddWidget: () -> Unit) {
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(24.dp))
-        FilledTonalButton(onClick = onAddWidget) { Text(stringResource(R.string.home_empty_button)) }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            FilledTonalButton(onClick = { onAddWidget(false) }) {
+                Icon(painterResource(R.drawable.ic_image), contentDescription = null, Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.home_add_normal))
+            }
+            FilledTonalButton(onClick = { onAddWidget(true) }) {
+                Icon(painterResource(R.drawable.ic_photo_library), contentDescription = null, Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.home_add_slideshow))
+            }
+        }
+    }
+}
+
+/**
+ * The "Add widget" button. Tapping it splits it into two: "Normal widget" and "Slideshow" (the same
+ * two widgets the launcher's widget list offers). Picking one asks the launcher to place it.
+ */
+@Composable
+private fun AddWidgetButton(open: Boolean, onOpen: () -> Unit, onPick: (slideshow: Boolean) -> Unit) {
+    AnimatedContent(
+        targetState = open,
+        // The one button fades out while the two grow out of the same spot (and back when closing).
+        transitionSpec = {
+            (fadeIn(tween(220, delayMillis = 60)) + scaleIn(tween(220, delayMillis = 60), initialScale = 0.85f))
+                .togetherWith(fadeOut(tween(120)))
+                .using(SizeTransform(clip = false))
+        },
+        contentAlignment = Alignment.BottomEnd,
+        label = "add widget"
+    ) { isOpen ->
+        if (!isOpen) {
+            ExtendedFloatingActionButton(
+                onClick = onOpen,
+                icon = { Icon(painterResource(R.drawable.ic_add), contentDescription = null) },
+                text = { Text(stringResource(R.string.home_add_widget)) }
+            )
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ExtendedFloatingActionButton(
+                    onClick = { onPick(false) },
+                    icon = { Icon(painterResource(R.drawable.ic_image), contentDescription = null) },
+                    text = { Text(stringResource(R.string.home_add_normal), maxLines = 1) }
+                )
+                ExtendedFloatingActionButton(
+                    onClick = { onPick(true) },
+                    icon = { Icon(painterResource(R.drawable.ic_photo_library), contentDescription = null) },
+                    text = { Text(stringResource(R.string.home_add_slideshow), maxLines = 1) }
+                )
+            }
+        }
     }
 }

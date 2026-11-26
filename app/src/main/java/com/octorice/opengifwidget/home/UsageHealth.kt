@@ -1,7 +1,5 @@
 package com.octorice.opengifwidget.home
 
-import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.content.Context
 import com.octorice.opengifwidget.data.AppSettings
 import com.octorice.opengifwidget.data.DeviceProfile
@@ -11,6 +9,7 @@ import com.octorice.opengifwidget.data.GifStorage
 import com.octorice.opengifwidget.gif.FrameLimits
 import com.octorice.opengifwidget.gif.FrameSet
 import com.octorice.opengifwidget.widget.GifWidgetProvider
+import com.octorice.opengifwidget.widget.SlowSlideshow
 import com.octorice.opengifwidget.widget.Playback
 import kotlin.math.roundToInt
 
@@ -71,23 +70,23 @@ object UsageHealth {
     /** Estimated launcher memory of every widget on the home screen except [appWidgetId]. */
     fun memoryOfOthers(context: Context, appWidgetId: Int): Long {
         val fpsCap = AppSettings.getFpsCap(context)
-        return AppWidgetManager.getInstance(context)
-            .getAppWidgetIds(ComponentName(context, GifWidgetProvider::class.java))
+        return GifWidgetProvider.allWidgetIds(context)
             .filter { it != appWidgetId }
             .sumOf { id ->
                 WidgetStore.getGif(context, id)?.frames
-                    ?.let { widgetCost(it, WidgetStore.getSpeed(context, id), fpsCap).first } ?: 0L
+                    ?.let { widgetCost(it, WidgetStore.getSpeed(context, id), fpsCap, SlowSlideshow.isSlow(context, id)).first } ?: 0L
             }
     }
 
     /**
      * Launcher memory and flips per second of one widget, with this speed and FPS cap.
      * A shaped widget also shows its mask as the background layer: one more frame.
+     * [onePicture]: a slow slideshow, which only ever shows one of its pictures (and never flips).
      */
-    fun widgetCost(frames: FrameSet, speed: Float, fpsCap: Int): Pair<Long, Float> {
+    fun widgetCost(frames: FrameSet, speed: Float, fpsCap: Int, onePicture: Boolean = false): Pair<Long, Float> {
         val frameBytes = frames.width.toLong() * frames.height * 4
         val maskBytes = if (frames.masked) frameBytes else 0L
-        if (frames.frameCount <= 1) return frameBytes + maskBytes to 0f // a still picture doesn't flip
+        if (frames.frameCount <= 1 || onePicture) return frameBytes + maskBytes to 0f // a still picture doesn't flip
         val plan = Playback.plan(frames.frameCount, frames.intervalMs, speed, fpsCap)
         return plan.frames.size * frameBytes + maskBytes to 1000f / plan.intervalMs
     }
@@ -98,7 +97,7 @@ object UsageHealth {
         val maxFps = AppSettings.maxFpsCap(context)
 
         val costs = widgets.mapNotNull { widget ->
-            widget.gif?.frames?.let { widget.appWidgetId to widgetCost(it, widget.speed, fpsCap) }
+            widget.gif?.frames?.let { widget.appWidgetId to widgetCost(it, widget.speed, fpsCap, widget.slowSlideshow) }
         }
         val memory = costs.sumOf { it.second.first }
         val flips = costs.sumOf { it.second.second.toDouble() }.roundToInt()
@@ -106,7 +105,7 @@ object UsageHealth {
         // What a lower cap would save (only worth suggesting if there is a lower option).
         val lowerCap = AppSettings.FPS_CAP_OPTIONS.filter { it < fpsCap }.maxOrNull()?.let { minOf(it, 15) }
         val memoryAtLowerCap = if (lowerCap == null) memory else widgets.sumOf { widget ->
-            widget.gif?.frames?.let { widgetCost(it, widget.speed, lowerCap).first } ?: 0L
+            widget.gif?.frames?.let { widgetCost(it, widget.speed, lowerCap, widget.slowSlideshow).first } ?: 0L
         }
 
         val memoryLevel = when {

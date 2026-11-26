@@ -72,6 +72,27 @@
                 android:resource="@xml/gif_widget_info" />
         </receiver>
 
+        <!--
+            The second entry in the launcher's widget list: "OpenGIFWidget Slideshow". Same code as the
+            normal widget (SlideshowWidgetProvider only gives it its own name), its own preview.
+        -->
+        <receiver
+            android:name=".widget.SlideshowWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/slideshow_widget_info" />
+        </receiver>
+
+        <!-- Slow slideshows (5 min or more per picture): the timer that shows the next picture. -->
+        <receiver
+            android:name=".widget.NextPictureReceiver"
+            android:exported="false" />
+
         <!-- Redraws every widget after a reboot or an app update (see RestoreWidgetsReceiver). -->
         <receiver
             android:name=".widget.RestoreWidgetsReceiver"

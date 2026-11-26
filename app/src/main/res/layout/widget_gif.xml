@@ -39,6 +39,29 @@
         android:layout_height="match_parent"
         android:autoStart="true" />
 
+    <!--
+        Slideshows with a transition: the same flipper, with the launcher animating each change.
+        RemoteViews can't set animations from code, so each transition has its own flipper here and
+        only the chosen one is shown (empty hidden flippers cost nothing).
+    -->
+    <ViewFlipper
+        android:id="@+id/widget_flipper_fade"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:autoStart="true"
+        android:inAnimation="@anim/slideshow_crossfade_in"
+        android:outAnimation="@anim/slideshow_crossfade_out"
+        android:visibility="gone" />
+
+    <ViewFlipper
+        android:id="@+id/widget_flipper_slide"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:autoStart="true"
+        android:inAnimation="@anim/slideshow_slide_in"
+        android:outAnimation="@anim/slideshow_slide_out"
+        android:visibility="gone" />
+
     <!-- Still pictures: a single plain ImageView is added here instead of using the flipper. -->
     <FrameLayout
         android:id="@+id/widget_still"

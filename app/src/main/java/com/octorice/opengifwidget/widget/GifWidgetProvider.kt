@@ -13,14 +13,18 @@ import com.octorice.opengifwidget.config.GifConfigActivity
 import com.octorice.opengifwidget.data.AppSettings
 import com.octorice.opengifwidget.data.GifStorage
 import com.octorice.opengifwidget.data.ScaleMode
+import com.octorice.opengifwidget.data.Transition
 import com.octorice.opengifwidget.data.WidgetStore
 import com.octorice.opengifwidget.provider.FrameProvider
 
 /**
  * The home screen widget. Android calls these methods; we answer by sending
  * RemoteViews (a description of the layout) to the launcher, which draws it.
+ *
+ * "open" so [SlideshowWidgetProvider] can reuse all of it: the launcher lists the two as separate
+ * widgets, but both kinds are drawn, resized and cleaned up by this same code.
  */
-class GifWidgetProvider : AppWidgetProvider() {
+open class GifWidgetProvider : AppWidgetProvider() {
 
     override fun onUpdate(
         context: Context,
@@ -32,7 +36,8 @@ class GifWidgetProvider : AppWidgetProvider() {
         }
         // onUpdate runs on reboot, app updates and when widgets are added,
         // which makes it a good moment to sweep away files of widgets that no longer exist.
-        val allIds = appWidgetManager.getAppWidgetIds(ComponentName(context, GifWidgetProvider::class.java))
+        // Both kinds count: a slideshow's update must never sweep away a normal widget's files.
+        val allIds = allWidgetIds(context)
         // Safety: if Android reports no widgets while we're updating some, something is off; skip.
         if (allIds.isNotEmpty()) {
             val activeIds = (allIds + appWidgetIds).toSet()
@@ -65,22 +70,50 @@ class GifWidgetProvider : AppWidgetProvider() {
     /** A widget was removed from the home screen: delete its GIF, frames and settings. */
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
         for (appWidgetId in appWidgetIds) {
+            SlowSlideshow.cancel(context, appWidgetId)
             WidgetStore.remove(context, appWidgetId)
             GifStorage.deleteWidgetFiles(context, appWidgetId)
         }
     }
 
-    /** The last widget was removed: nothing should be left, so clear everything. */
+    /**
+     * The last widget of THIS kind was removed. Android calls this once per kind, so only clear
+     * everything when no widget of the other kind is left either.
+     */
     override fun onDisabled(context: Context) {
+        if (allWidgetIds(context).isNotEmpty()) return
         WidgetStore.removeAllExcept(context, emptySet())
         GifStorage.deleteAllExcept(context, emptySet())
     }
 
     companion object {
+        /** The widget's flippers: plain (animations, slideshows without a transition), then one per transition. */
+        private val FLIPPERS = intArrayOf(R.id.widget_flipper, R.id.widget_flipper_fade, R.id.widget_flipper_slide)
+
+        /**
+         * Shows [flipper] and hides the others (all of them when null). Always set explicitly,
+         * because launchers re-apply updates on top of what they showed before.
+         */
+        private fun showOnlyFlipper(views: RemoteViews, flipper: Int?) {
+            for (id in FLIPPERS) views.setViewVisibility(id, if (id == flipper) View.VISIBLE else View.GONE)
+        }
+
+        /** Every widget of ours on the home screen: normal widgets and slideshows. */
+        fun allWidgetIds(context: Context): IntArray {
+            val manager = AppWidgetManager.getInstance(context)
+            return manager.getAppWidgetIds(ComponentName(context, GifWidgetProvider::class.java)) +
+                manager.getAppWidgetIds(ComponentName(context, SlideshowWidgetProvider::class.java))
+        }
+
+        /** True if this widget was added as a slideshow (the launcher remembers which kind it is). */
+        fun isSlideshow(context: Context, appWidgetId: Int): Boolean =
+            AppWidgetManager.getInstance(context).getAppWidgetInfo(appWidgetId)?.provider?.className ==
+                SlideshowWidgetProvider::class.java.name
+
         /** Redraws every widget, e.g. after the FPS cap changed in Settings. */
         fun updateAll(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
-            for (id in manager.getAppWidgetIds(ComponentName(context, GifWidgetProvider::class.java))) {
+            for (id in allWidgetIds(context)) {
                 updateWidget(context, manager, id)
             }
         }
@@ -92,9 +125,13 @@ class GifWidgetProvider : AppWidgetProvider() {
             val frames = gif?.frames
 
             if (frames == null) {
-                // No frames yet: show the placeholder and a hint.
+                // No frames yet: show the placeholder and a hint (and no slideshow timer).
+                SlowSlideshow.cancel(context, appWidgetId)
                 val label = if (gif == null) {
-                    context.getString(R.string.widget_tap_to_choose)
+                    context.getString(
+                        if (isSlideshow(context, appWidgetId)) R.string.widget_tap_to_choose_slideshow
+                        else R.string.widget_tap_to_choose
+                    )
                 } else {
                     context.getString(R.string.widget_tap_to_repick)
                 }
@@ -106,50 +143,89 @@ class GifWidgetProvider : AppWidgetProvider() {
                 // Fit and Fill are two tiny layouts that differ only in the ImageView's scaleType.
                 // Shaped and custom-zoom frames already have their box's shape: they're only
                 // centered (Fit), never cropped again.
+                val slideshow = isSlideshow(context, appWidgetId)
+                val fill = WidgetStore.getScaleMode(context, appWidgetId) == ScaleMode.FILL
                 val frameLayout = when {
-                    frames.masked || frames.boxed -> R.layout.widget_frame_fit
+                    frames.masked -> R.layout.widget_frame_fit
+                    // A Fill slideshow without a shape: its frames already have the widget's shape, but
+                    // the launcher's real size can differ a little from the size it reports. Cropping the
+                    // last few pixels (Fill) keeps it edge to edge instead of leaving thin empty strips.
+                    slideshow && fill -> R.layout.widget_frame_fill
+                    frames.boxed -> R.layout.widget_frame_fit
+                    !fill -> R.layout.widget_frame_fit
                     WidgetStore.getScaleMode(context, appWidgetId) == ScaleMode.FIT -> R.layout.widget_frame_fit
                     else -> R.layout.widget_frame_fill
                 }
                 // The launcher often re-applies an update on top of the widget it already shows
                 // instead of rebuilding it, so clear the old frames first. Without this, every
                 // update (Fit/Fill switch, new GIF, reinstall) piled another full set of frames on top.
-                views.removeAllViews(R.id.widget_flipper)
+                for (flipper in FLIPPERS) views.removeAllViews(flipper)
                 views.removeAllViews(R.id.widget_still)
 
-                if (frames.frameCount == 1) {
+                // A slow slideshow (5 min or more per picture) shows one picture at a time; a timer
+                // (SlowSlideshow) redraws it with the next one.
+                val slow = slideshow && frames.frameCount > 1 && SlowSlideshow.isSlow(context, appWidgetId)
+                if (frames.frameCount == 1 || slow) {
                     // A still picture: one plain ImageView, no flipper (nothing to flip).
+                    val frame = if (slow) {
+                        SlowSlideshow.currentFrame(context, appWidgetId, frames.frameCount, WidgetStore.getShuffle(context, appWidgetId))
+                    } else {
+                        0
+                    }
                     val frameViews = RemoteViews(context.packageName, frameLayout)
                     frameViews.setImageViewUri(
                         R.id.frame_image,
-                        FrameProvider.frameUri(context, appWidgetId, frames.version, 0)
+                        FrameProvider.frameUri(context, appWidgetId, frames.version, frame)
                     )
                     views.addView(R.id.widget_still, frameViews)
                     views.setViewVisibility(R.id.widget_still, View.VISIBLE)
-                    views.setViewVisibility(R.id.widget_flipper, View.GONE)
+                    showOnlyFlipper(views, null)
                 } else {
-                    // Fast animations show fewer frames, spread evenly, so the launcher never flips
-                    // faster than the FPS cap (see Playback). Frames left out aren't loaded at all.
-                    val plan = Playback.plan(
-                        frames.frameCount,
-                        frames.intervalMs,
-                        speed = WidgetStore.getSpeed(context, appWidgetId),
-                        fpsCap = AppSettings.getFpsCap(context)
-                    )
+                    val order: List<Int>
+                    val intervalMs: Int
+                    val flipper: Int
+                    if (slideshow) {
+                        // A slideshow's frames are its pictures: all shown, each for "Time per picture",
+                        // in a new random order every time the widget is drawn if Shuffle is on.
+                        val all = (0 until frames.frameCount).toList()
+                        order = if (WidgetStore.getShuffle(context, appWidgetId)) all.shuffled() else all
+                        intervalMs = WidgetStore.getSlideSeconds(context, appWidgetId) * 1000
+                        // Each transition is its own flipper in the layout (animations can't be set from code).
+                        flipper = when (WidgetStore.getTransition(context, appWidgetId)) {
+                            Transition.NONE -> R.id.widget_flipper
+                            Transition.FADE -> R.id.widget_flipper_fade
+                            Transition.SLIDE -> R.id.widget_flipper_slide
+                        }
+                    } else {
+                        // Fast animations show fewer frames, spread evenly, so the launcher never flips
+                        // faster than the FPS cap (see Playback). Frames left out aren't loaded at all.
+                        val plan = Playback.plan(
+                            frames.frameCount,
+                            frames.intervalMs,
+                            speed = WidgetStore.getSpeed(context, appWidgetId),
+                            fpsCap = AppSettings.getFpsCap(context)
+                        )
+                        order = plan.frames
+                        intervalMs = plan.intervalMs
+                        flipper = R.id.widget_flipper
+                    }
                     // Add one ImageView per shown frame to the ViewFlipper. We only send the frame's
                     // address (Uri); the launcher loads the WebP itself through FrameProvider.
-                    for (index in plan.frames) {
+                    for (index in order) {
                         val frameViews = RemoteViews(context.packageName, frameLayout)
                         frameViews.setImageViewUri(
                             R.id.frame_image,
                             FrameProvider.frameUri(context, appWidgetId, frames.version, index)
                         )
-                        views.addView(R.id.widget_flipper, frameViews)
+                        views.addView(flipper, frameViews)
                     }
-                    views.setInt(R.id.widget_flipper, "setFlipInterval", plan.intervalMs)
-                    views.setViewVisibility(R.id.widget_flipper, View.VISIBLE)
+                    views.setInt(flipper, "setFlipInterval", intervalMs)
+                    showOnlyFlipper(views, flipper)
                     views.setViewVisibility(R.id.widget_still, View.GONE)
                 }
+                // The slow slideshow's timer: (re)set while it's slow, stopped otherwise.
+                if (slow) SlowSlideshow.schedule(context, appWidgetId, WidgetStore.getSlideSeconds(context, appWidgetId))
+                else SlowSlideshow.cancel(context, appWidgetId)
             }
 
             // Background color and opacity: the rounded shape is tinted to the color, then faded.

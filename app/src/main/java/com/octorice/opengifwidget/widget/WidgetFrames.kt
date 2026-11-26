@@ -1,16 +1,17 @@
 package com.octorice.opengifwidget.widget
 
 import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.content.Context
 import com.octorice.opengifwidget.data.GifStorage
 import com.octorice.opengifwidget.data.ScaleMode
+import com.octorice.opengifwidget.data.Slide
 import com.octorice.opengifwidget.data.WidgetStore
 import com.octorice.opengifwidget.data.friendlyErrors
 import com.octorice.opengifwidget.gif.Crop
 import com.octorice.opengifwidget.gif.FrameExtractor
 import com.octorice.opengifwidget.gif.FrameLimits
 import com.octorice.opengifwidget.gif.FrameSet
+import com.octorice.opengifwidget.gif.SlidePicture
 import com.octorice.opengifwidget.gif.Spin
 import com.octorice.opengifwidget.data.AppSettings
 import com.octorice.opengifwidget.shape.WidgetShape
@@ -77,6 +78,57 @@ object WidgetFrames {
         frames
     }
 
+    /** How long each slideshow picture stays up, until "Time per picture" exists (next step). */
+    const val SLIDE_INTERVAL_MS = 5000
+
+    /**
+     * Makes a slideshow's widget frames (a new folder): one frame per picture in [slides], in order,
+     * each Fit or Fill-ed into the widget's box (or the shape's box). Throws ImportException on failure.
+     * Each picture may have its own Reposition (Slide.zoom). No spin in slideshows, and no widget-wide
+     * custom zoom, so those are always saved as "none".
+     */
+    fun makeSlideshow(
+        context: Context,
+        appWidgetId: Int,
+        slides: List<Slide>,
+        scaleMode: ScaleMode,
+        roundCorners: Boolean,
+        pickedShape: WidgetShape?,
+        style: ShapeStyle = ShapeStyle.PLAIN,
+        onProgress: (Int, Int) -> Unit = { _, _ -> }
+    ): FrameSet = synchronized(lock) {
+        val shape = WidgetSizes.shapeFor(context, appWidgetId, pickedShape, style)
+        val aspect = WidgetSizes.aspectRatio(context, appWidgetId)
+        val target = if (shape != null) {
+            WidgetSizes.shapeMaxSidePx(context, appWidgetId, shape.aspect)
+        } else {
+            WidgetSizes.maxSidePx(context, appWidgetId)
+        }
+        val rounded = shape == null && cutsCorners(scaleMode, roundCorners, null)
+        val cornerFraction = if (rounded) WidgetSizes.cornerRadiusFraction(context, appWidgetId) else 0f
+        val version = GifStorage.newVersion()
+        val outDir = GifStorage.framesDir(context, appWidgetId, version)
+        val frames = friendlyErrors(cleanUp = { outDir.deleteRecursively() }) {
+            FrameExtractor.deriveSlideshowFrames(
+                pictures = slides.map {
+                    SlidePicture(it.master, GifStorage.framesDir(context, appWidgetId, it.id), it.zoom, it.centerX, it.centerY)
+                },
+                outDir = outDir,
+                version = version,
+                boxAspect = shape?.aspect ?: aspect,
+                fill = scaleMode == ScaleMode.FILL,
+                intervalMs = SLIDE_INTERVAL_MS,
+                limits = FrameLimits.forDevice(context),
+                widgetMaxSidePx = target,
+                cornerRadiusFraction = cornerFraction,
+                shape = shape,
+                onProgress = onProgress
+            )
+        }
+        WidgetStore.saveFramesFit(context, appWidgetId, target ?: 0, aspect, rounded, shape?.id, null, null)
+        frames
+    }
+
     /** The spin that really applies: only with a shape that can spin (the CD), else none. */
     fun spinFor(shape: WidgetShape?, spinSeconds: Float?): Float? = if (shape?.spins == true) spinSeconds else null
 
@@ -96,7 +148,10 @@ object WidgetFrames {
      */
     fun refreshIfNeeded(context: Context, appWidgetId: Int): Boolean {
         val gif = WidgetStore.getGif(context, appWidgetId) ?: return false
-        val master = gif.master ?: return false
+        val slides = WidgetStore.getSlides(context, appWidgetId)
+        val slideshow = slides.isNotEmpty()
+        val master = gif.master
+        if (master == null && !slideshow) return false
         val old = gif.frames ?: return false
         // At the widget's current size: a resized Dots widget gets a new grid, so its id changes
         // ("dots@3x3" -> "dots@6x3") and the frames are re-cut below.
@@ -119,15 +174,21 @@ object WidgetFrames {
         val sizeChanged = oldTarget == 0 || newTarget > oldTarget * 1.15 || newTarget < oldTarget * 0.7
         val newAspect = WidgetSizes.aspectRatio(context, appWidgetId)
         // (With a cutter shape the crop keeps the cutter's shape, whatever the widget's shape.)
-        val shapeChanged = cutter == null && (scaleMode == ScaleMode.FILL || zoom != null) && oldAspect > 0f && abs(newAspect - oldAspect) / oldAspect > 0.1f
+        // (Slideshow frames always have the widget's shape, even in Fit: every picture shares one box.)
+        val shapeChanged = cutter == null && (scaleMode == ScaleMode.FILL || zoom != null || slideshow) &&
+            oldAspect > 0f && abs(newAspect - oldAspect) / oldAspect > 0.1f
         // Frames made before the corners option existed (or after it changed) on Android 8-11.
         val cornersChanged = (cutter == null && cutsCorners(scaleMode, roundCorners, zoom)) != WidgetStore.getFramesRounded(context, appWidgetId)
         if (!sizeChanged && !shapeChanged && !cornersChanged && !cutterChanged && !zoomChanged && !spinChanged) return false
 
         return try {
-            val frames = make(
-                context, appWidgetId, master, scaleMode, WidgetStore.getCropCenter(context, appWidgetId), roundCorners, cutter, zoom, spinSeconds, style = style
-            )
+            val frames = if (slideshow) {
+                makeSlideshow(context, appWidgetId, slides, scaleMode, roundCorners, cutter, style)
+            } else {
+                make(
+                    context, appWidgetId, master!!, scaleMode, WidgetStore.getCropCenter(context, appWidgetId), roundCorners, cutter, zoom, spinSeconds, style = style
+                )
+            }
             WidgetStore.saveGif(context, appWidgetId, gif.copy(frames = frames))
             GifWidgetProvider.updateWidget(context, AppWidgetManager.getInstance(context), appWidgetId)
             // Only the old widget frames go (an unsaved pick in an open editor stays untouched).
@@ -143,7 +204,6 @@ object WidgetFrames {
      * Returns how many were remade.
      */
     fun refreshAll(context: Context): Int =
-        AppWidgetManager.getInstance(context)
-            .getAppWidgetIds(ComponentName(context, GifWidgetProvider::class.java))
+        GifWidgetProvider.allWidgetIds(context)
             .count { refreshIfNeeded(context, it) }
 }

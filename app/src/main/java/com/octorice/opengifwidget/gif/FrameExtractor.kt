@@ -46,6 +46,12 @@ data class FrameSet(
 )
 
 /**
+ * One slideshow picture for [FrameExtractor.deriveSlideshowFrames]: its master frame and folder, and
+ * its own zoom and center (null zoom = the slideshow's Fit / Fill, centered).
+ */
+data class SlidePicture(val master: FrameSet, val dir: File, val zoom: Float?, val centerX: Float, val centerY: Float)
+
+/**
  * Which part of the picture to keep, for Fill mode: a region with the widget's shape
  * ([aspectRatio] = width / height), centered as close as possible to
  * ([centerX], [centerY]), which go from 0 (left/top edge) to 1 (right/bottom edge).
@@ -434,6 +440,115 @@ object FrameExtractor {
             version = version, width = outWidth, height = outHeight, masked = mask != null, boxed = zoomBox != null,
             frameCount = steps.size,
             intervalMs = spinPlan?.intervalMs ?: master.intervalMs
+        )
+    }
+
+    /**
+     * Makes a slideshow's widget frames: one frame per picture ([pictures]), in this order. Every frame
+     * is the same "box" ([boxAspect] = the shape's box, or the whole widget): each picture is Fit or
+     * Fill-ed into it (centered), or placed with its own Reposition (zoom + center, the same math as
+     * the editor's preview, see [Zoom]); empty space stays see-through. So every frame has the same size, and the widget shows them all the same way.
+     * The launcher holds ALL pictures at once, so they share the per-widget pixel budget (like an
+     * animation's frames). The shape, its mask and the CD's shine work exactly like [deriveWidgetFrames].
+     */
+    fun deriveSlideshowFrames(
+        pictures: List<SlidePicture>,
+        outDir: File,
+        version: Long,
+        boxAspect: Float,
+        fill: Boolean,
+        intervalMs: Int,
+        limits: FrameLimits = FrameLimits.NORMAL,
+        widgetMaxSidePx: Int? = null,
+        cornerRadiusFraction: Float = 0f,
+        shape: WidgetShape? = null,
+        onProgress: (done: Int, total: Int) -> Unit
+    ): FrameSet {
+        if (pictures.isEmpty()) throw ImportException(R.string.error_frames_missing)
+        // Box size: as sharp as a still picture may be (and no bigger than the widget), then smaller
+        // until all pictures (plus a shape's background layer) fit the budget together.
+        val limitSide = limits.stillMaxSidePx
+        val maxSide = if (widgetMaxSidePx != null && widgetMaxSidePx > 0) minOf(limitSide, widgetMaxSidePx) else limitSide
+        var outWidth: Int
+        var outHeight: Int
+        if (boxAspect >= 1f) {
+            outWidth = maxSide
+            outHeight = max(1, (maxSide / boxAspect).roundToInt())
+        } else {
+            outHeight = maxSide
+            outWidth = max(1, (maxSide * boxAspect).roundToInt())
+        }
+        val layers = pictures.size + (if (shape != null) 1 else 0)
+        val totalPixels = layers.toDouble() * outWidth * outHeight
+        if (totalPixels > limits.maxTotalPixels) {
+            val k = sqrt(limits.maxTotalPixels / totalPixels)
+            outWidth = max(1, (outWidth * k).roundToInt())
+            outHeight = max(1, (outHeight * k).roundToInt())
+        }
+
+        outDir.mkdirs()
+        val output = createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+        val corners = if (cornerRadiusFraction > 0f && shape == null) {
+            val radius = cornerRadiusFraction * outWidth
+            val full = RectF(0f, 0f, outWidth.toFloat(), outHeight.toFloat())
+            Path().apply {
+                addRect(full, Path.Direction.CW)
+                op(Path().apply { addRoundRect(full, radius, radius, Path.Direction.CW) }, Path.Op.DIFFERENCE)
+            }
+        } else {
+            null
+        }
+        val erasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT) }
+        val mask = shape?.let { ShapeMask.render(it, outWidth, outHeight) }
+        val maskPaint = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
+        val shine = shape?.renderShine(outWidth, outHeight)
+        try {
+            if (mask != null) FrameFiles.writeWebp(mask, File(outDir, FrameFiles.MASK_FILE_NAME), MASK_QUALITY)
+            for ((index, item) in pictures.withIndex()) {
+                val master = item.master
+                val dir = item.dir
+                // Decoded only about as big as needed (a 1620 px master for a 400 px frame is halved twice).
+                val picture = FrameFiles.decode(File(dir, FrameFiles.frameFileName(0)), maxSidePx = max(outWidth, outHeight))
+                    ?: throw ImportException(R.string.error_frames_missing)
+                try {
+                    val w = master.width.toFloat()
+                    val h = master.height.toFloat()
+                    val zoom = item.zoom ?: if (fill) 1f else Zoom.fitZoom(w, h, boxAspect)
+                    // The part of the picture the box shows, in master pixels; drawn so it fills the frame.
+                    val box = if (item.zoom != null) {
+                        Zoom.box(w, h, boxAspect, zoom, item.centerX, item.centerY)
+                    } else {
+                        Zoom.box(w, h, boxAspect, zoom, 0.5f, 0.5f)
+                    }
+                    val k = outWidth / box.width()
+                    val target = RectF(-box.left * k, -box.top * k, (w - box.left) * k, (h - box.top) * k)
+                    output.eraseColor(Color.TRANSPARENT)
+                    canvas.drawBitmap(picture, null, target, paint)
+                    if (corners != null) canvas.drawPath(corners, erasePaint)
+                    if (mask != null) canvas.drawBitmap(mask, 0f, 0f, maskPaint)
+                    if (shine != null) canvas.drawBitmap(shine, 0f, 0f, null)
+                    FrameFiles.writeWebp(output, File(outDir, FrameFiles.frameFileName(index)), STILL_QUALITY)
+                } finally {
+                    picture.recycle()
+                }
+                onProgress(index + 1, pictures.size)
+            }
+        } finally {
+            output.recycle()
+            mask?.recycle()
+            shine?.recycle()
+        }
+        return FrameSet(
+            version = version,
+            frameCount = pictures.size,
+            sourceFrameCount = pictures.size,
+            intervalMs = intervalMs,
+            width = outWidth,
+            height = outHeight,
+            masked = mask != null,
+            boxed = true
         )
     }
 

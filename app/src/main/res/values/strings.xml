@@ -5,10 +5,14 @@
     <string name="widget_description">Shows a picture, GIF or video on your home screen</string>
     <string name="widget_image_description">Widget picture</string>
     <string name="widget_tap_to_choose">Tap to choose a picture</string>
+    <string name="slideshow_widget_description">A slideshow of up to 20 pictures on your home screen</string>
+    <string name="widget_tap_to_choose_slideshow">Tap to choose pictures</string>
     <string name="widget_tap_to_repick">Tap and pick this file again</string>
 
     <!-- Main screen -->
     <string name="home_add_widget">Add widget</string>
+    <string name="home_add_normal">Normal widget</string>
+    <string name="home_add_slideshow">Slideshow</string>
     <string name="home_pin_confirm">Confirm in the dialog to place your widget</string>
     <string name="home_how_to_add_title">Add it from your home screen</string>
     <string name="home_how_to_add_steps">1. Long-press an empty spot on your home screen\n2. Tap Widgets\n3. Find OpenGIFWidget and drag it onto the screen</string>
@@ -64,9 +68,12 @@
         <item quantity="other">%1$d frames · %2$s</item>
     </plurals>
     <string name="home_card_still">Picture · %1$s</string>
+    <plurals name="home_card_pictures">
+        <item quantity="one">Slideshow · %1$d picture · %2$s</item>
+        <item quantity="other">Slideshow · %1$d pictures · %2$s</item>
+    </plurals>
     <string name="home_empty_title">No widgets yet</string>
     <string name="home_empty_text">Put a widget on your home screen, pick a picture, GIF or video, and watch it play right there.</string>
-    <string name="home_empty_button">Add your first widget</string>
     <string name="mode_fit">Fit</string>
     <string name="mode_fill">Fill</string>
     <string name="mode_zoom">Zoom</string>
@@ -79,6 +86,58 @@
     <!-- Editor -->
     <string name="editor_title_new">New widget</string>
     <string name="editor_title_edit">Edit widget</string>
+    <string name="editor_title_new_slideshow">New slideshow</string>
+    <string name="editor_title_edit_slideshow">Edit slideshow</string>
+
+    <!-- Slideshow editor -->
+    <string name="slideshow_default_name">Slideshow</string>
+    <string name="slideshow_empty">No pictures yet</string>
+    <string name="slideshow_count">%1$d of %2$d pictures</string>
+    <string name="slideshow_pictures">Pictures</string>
+    <string name="slideshow_reorder_hint">Tap a picture to see it above. Long-press and drag to change the order.</string>
+    <string name="slideshow_pick">Pick pictures for your slideshow</string>
+    <string name="slideshow_add">Add pictures</string>
+    <string name="slideshow_full">%1$d pictures is the most a slideshow can hold.</string>
+    <string name="slideshow_too_many">A slideshow holds up to %1$d pictures, so the rest were left out.</string>
+    <string name="slideshow_playback">Playback</string>
+    <string name="slideshow_time">Time per picture</string>
+    <plurals name="slideshow_seconds">
+        <item quantity="one">%1$d second</item>
+        <item quantity="other">%1$d seconds</item>
+    </plurals>
+    <plurals name="slideshow_minutes">
+        <item quantity="one">%1$d minute</item>
+        <item quantity="other">%1$d minutes</item>
+    </plurals>
+    <plurals name="slideshow_hours">
+        <item quantity="one">%1$d hour</item>
+        <item quantity="other">%1$d hours</item>
+    </plurals>
+    <plurals name="slideshow_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <string name="slideshow_slow_hint">A new picture about every %1$s, even while you\'re not looking. To save battery, Android may change it up to about 10 minutes late.</string>
+    <string name="slideshow_transition">Transition</string>
+    <string name="transition_none">None</string>
+    <string name="transition_fade">Fade</string>
+    <string name="transition_slide">Slide</string>
+    <string name="slideshow_shuffle">Shuffle</string>
+    <string name="slideshow_shuffle_description">Plays the pictures in a random order</string>
+    <string name="slideshow_picture_number">Picture %1$d</string>
+    <string name="slideshow_remove">Remove this picture</string>
+    <string name="slideshow_fit_description">Shows each whole picture, with empty space around it if needed. Tap Reposition on the preview to adjust the picture shown.</string>
+    <string name="slideshow_fill_description">Each picture covers the whole widget. Tap Reposition on the preview to adjust the picture shown.</string>
+    <string name="slideshow_picture_number_repositioned">Picture %1$d, repositioned</string>
+    <plurals name="slideshow_reset_title">
+        <item quantity="one">Reset %1$d custom crop?</item>
+        <item quantity="other">Reset %1$d custom crops?</item>
+    </plurals>
+    <plurals name="slideshow_reset_text">
+        <item quantity="one">The picture you repositioned will go back to %1$s, like the others.</item>
+        <item quantity="other">The pictures you repositioned will go back to %1$s, like the others.</item>
+    </plurals>
+    <string name="slideshow_reset">Reset</string>
     <string name="editor_close">Close</string>
     <string name="editor_add">Add to home screen</string>
     <string name="editor_save">Save</string>

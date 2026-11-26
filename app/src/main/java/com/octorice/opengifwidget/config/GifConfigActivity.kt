@@ -75,6 +75,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -133,6 +134,10 @@ import androidx.compose.ui.graphics.asComposePath
 import com.octorice.opengifwidget.ui.friendlyMessage
 import com.octorice.opengifwidget.ui.toComposeColor
 import com.octorice.opengifwidget.data.ScaleMode
+import com.octorice.opengifwidget.data.Slide
+import com.octorice.opengifwidget.data.SlideTiming
+import com.octorice.opengifwidget.data.Transition
+import com.octorice.opengifwidget.gif.FrameFiles
 import com.octorice.opengifwidget.data.StoredGif
 import com.octorice.opengifwidget.data.WidgetStore
 import com.octorice.opengifwidget.gif.FrameExtractor
@@ -145,6 +150,7 @@ import com.octorice.opengifwidget.ui.fillPlacement
 import com.octorice.opengifwidget.ui.rememberFramePlayer
 import com.octorice.opengifwidget.ui.theme.OpenGIFWidgetTheme
 import com.octorice.opengifwidget.widget.GifWidgetProvider
+import com.octorice.opengifwidget.widget.SlowSlideshow
 import com.octorice.opengifwidget.widget.WidgetFrames
 import com.octorice.opengifwidget.widget.WidgetSizes
 import com.octorice.opengifwidget.home.UsageHealth
@@ -226,6 +232,12 @@ class GifConfigActivity : ComponentActivity() {
                 style = WidgetStore.getShapeStyle(this, appWidgetId),
                 background = WidgetStore.getBackground(this, appWidgetId),
                 speed = WidgetStore.getSpeed(this, appWidgetId)
+            ),
+            slides = WidgetStore.getSlides(this, appWidgetId),
+            playback = SlideshowPlayback(
+                shuffle = WidgetStore.getShuffle(this, appWidgetId),
+                seconds = WidgetStore.getSlideSeconds(this, appWidgetId),
+                transition = WidgetStore.getTransition(this, appWidgetId)
             )
         )
 
@@ -234,6 +246,9 @@ class GifConfigActivity : ComponentActivity() {
             OpenGIFWidgetTheme {
                 EditorScreen(
                     saved = saved,
+                    // Which of the two widgets this is (the launcher remembers). For now only the title
+                    // differs; the slideshow's own controls come in the next steps.
+                    slideshow = GifWidgetProvider.isSlideshow(this, appWidgetId),
                     onHomeScreen = onHomeScreen,
                     widgetAspectRatio = WidgetSizes.aspectRatio(this, appWidgetId),
                     fpsCap = AppSettings.getFpsCap(this),
@@ -245,6 +260,8 @@ class GifConfigActivity : ComponentActivity() {
                     videoThumbnail = ::videoThumbnail,
                     prepareVideo = ::prepareVideo,
                     save = ::save,
+                    prepareSlides = ::prepareSlides,
+                    saveSlideshow = ::saveSlideshow,
                     onClose = {
                         // Delete an unsaved pick right away, so the app's list never counts it
                         // (onDestroy also does this, but only after the list has already reloaded).
@@ -359,6 +376,108 @@ class GifConfigActivity : ComponentActivity() {
         }
 
     /**
+     * Slideshow: copies and decodes each picked picture into its own master frame (one still each,
+     * in its own folder), one after another. A picture that can't be read is skipped; the first
+     * problem is reported in [SlideImport.error] (null if all went fine). Unlike [prepare], earlier
+     * unsaved picks are kept: they're the other pictures of the slideshow being made.
+     * (A GIF becomes a still picture: its first frame.)
+     */
+    private suspend fun prepareSlides(uris: List<Uri>, onProgress: (Int, Int) -> Unit): SlideImport =
+        withContext(Dispatchers.IO) {
+            val context = applicationContext
+            val copy = GifStorage.importCopyFile(context, appWidgetId)
+            val slides = mutableListOf<Slide>()
+            var error: IOException? = null
+            onProgress(0, uris.size)
+            for ((index, uri) in uris.withIndex()) {
+                val version = GifStorage.newVersion()
+                val outDir = GifStorage.framesDir(context, appWidgetId, version)
+                try {
+                    friendlyErrors(cleanUp = { outDir.deleteRecursively() }) {
+                        val imported = GifStorage.importFile(context, uri, appWidgetId)
+                        val master = FrameExtractor.extractMasterFromImage(copy, outDir, version)
+                        slides += Slide(master, imported.name, imported.sizeBytes)
+                    }
+                } catch (e: IOException) {
+                    if (error == null) error = e
+                } finally {
+                    copy.delete()
+                }
+                onProgress(index + 1, uris.size)
+            }
+            SlideImport(slides, error)
+        }
+
+    /**
+     * Saves a slideshow: makes its widget frames from [slides] (unless only the background, name or
+     * timing changed), remembers everything and refreshes the widget. Like [save], a save that
+     * would overload the home screen's RAM is refused and leaves everything as it was.
+     */
+    private suspend fun saveSlideshow(
+        slides: List<Slide>,
+        settings: EditorSettings,
+        playback: SlideshowPlayback,
+        remakeFrames: Boolean,
+        onProgress: (Int, Int) -> Unit
+    ) = withContext(Dispatchers.IO) {
+        val context = applicationContext
+        if (slides.isEmpty()) throw ImportException(R.string.error_frames_missing)
+        val old = WidgetStore.getGif(context, appWidgetId)
+        var frames = old?.frames
+        // A slow slideshow only ever shows one picture, so it costs the launcher much less RAM.
+        val onePicture = SlideTiming.isSlow(playback.seconds)
+        val oldPlayback = SlideshowPlayback(
+            WidgetStore.getShuffle(context, appWidgetId),
+            WidgetStore.getSlideSeconds(context, appWidgetId),
+            WidgetStore.getTransition(context, appWidgetId)
+        )
+        if (remakeFrames || frames == null) {
+            if (GifStorage.freeStorageBytes(context) < UsageHealth.VERY_LOW_STORAGE_BYTES) {
+                throw ImportException(R.string.error_no_space)
+            }
+            val oldFit = WidgetStore.getFramesFit(context, appWidgetId)
+            val oldRounded = WidgetStore.getFramesRounded(context, appWidgetId)
+            val oldShapeId = WidgetStore.getFramesShapeId(context, appWidgetId)
+            val made = WidgetFrames.makeSlideshow(
+                context, appWidgetId, slides, settings.scaleMode, settings.roundCorners, settings.shape, settings.style, onProgress
+            )
+            try {
+                checkMemoryLimit(context, made, 1f, onePicture)
+            } catch (e: ImportException) {
+                GifStorage.framesDir(context, appWidgetId, made.version).deleteRecursively()
+                WidgetStore.saveFramesFit(context, appWidgetId, oldFit.first, oldFit.second, oldRounded, oldShapeId, null, null)
+                throw e
+            }
+            frames = made
+        } else {
+            checkMemoryLimit(context, frames, 1f, onePicture) // e.g. slow -> fast shows every picture again
+        }
+
+        val defaultName = context.getString(R.string.slideshow_default_name)
+        WidgetStore.saveSlides(context, appWidgetId, slides)
+        WidgetStore.saveGif(context, appWidgetId, StoredGif(defaultName, slides.sumOf { it.sizeBytes }, frames = frames))
+        WidgetStore.saveShuffle(context, appWidgetId, playback.shuffle)
+        WidgetStore.saveSlideSeconds(context, appWidgetId, playback.seconds)
+        WidgetStore.saveTransition(context, appWidgetId, playback.transition)
+        WidgetStore.saveScaleMode(context, appWidgetId, settings.scaleMode)
+        WidgetStore.saveRoundCorners(context, appWidgetId, settings.roundCorners)
+        WidgetStore.saveShape(context, appWidgetId, settings.shape)
+        WidgetStore.saveZoom(context, appWidgetId, null)
+        WidgetStore.saveSpin(context, appWidgetId, null)
+        WidgetStore.saveShapeStyle(context, appWidgetId, settings.style)
+        WidgetStore.saveBackground(context, appWidgetId, settings.background)
+        WidgetStore.saveName(context, appWidgetId, settings.name.trim().ifEmpty { defaultName })
+        WidgetStore.setHidden(context, appWidgetId, false)
+        // New pictures, order or timing: a slow slideshow starts again from its first picture, with a full wait.
+        if (remakeFrames || playback != oldPlayback) {
+            SlowSlideshow.restart(context, appWidgetId, frames.frameCount, playback.shuffle)
+        }
+        // Pictures you removed in the editor (and old frames) are deleted here.
+        GifStorage.deleteFramesExcept(context, appWidgetId, slides.map { it.id }.toSet() + frames.version)
+        GifWidgetProvider.updateWidget(context, AppWidgetManager.getInstance(context), appWidgetId)
+    }
+
+    /**
      * Makes the widget's frames from the master frames (cropped for Fill), remembers
      * everything, and refreshes the widget. [gif] is the newly picked file or the current one.
      */
@@ -423,11 +542,15 @@ class GifConfigActivity : ComponentActivity() {
      * A change that makes this widget lighter (or no heavier) is always allowed, even when already over:
      * widgets you have are never blocked from getting lighter.
      */
-    private fun checkMemoryLimit(context: Context, frames: FrameSet, speed: Float) {
+    private fun checkMemoryLimit(context: Context, frames: FrameSet, speed: Float, onePicture: Boolean = false) {
         val fpsCap = AppSettings.getFpsCap(context)
-        val newCost = UsageHealth.widgetCost(frames, speed, fpsCap).first
+        val newCost = UsageHealth.widgetCost(frames, speed, fpsCap, onePicture).first
         val oldCost = WidgetStore.getGif(context, appWidgetId)?.frames
-            ?.let { UsageHealth.widgetCost(it, WidgetStore.getSpeed(context, appWidgetId), fpsCap).first } ?: 0L
+            ?.let {
+                UsageHealth.widgetCost(
+                    it, WidgetStore.getSpeed(context, appWidgetId), fpsCap, SlowSlideshow.isSlow(context, appWidgetId)
+                ).first
+            } ?: 0L
         if (newCost <= oldCost) return
         val limit = UsageHealth.memoryLimitBytes(context)
         val total = UsageHealth.memoryOfOthers(context, appWidgetId) + newCost
@@ -485,7 +608,24 @@ private data class EditorSettings(
 )
 
 /** What the widget uses right now, to know whether anything changed. */
-private data class SavedSettings(val gif: StoredGif?, val settings: EditorSettings)
+private data class SavedSettings(
+    val gif: StoredGif?,
+    val settings: EditorSettings,
+    val slides: List<Slide> = emptyList(), // a slideshow's pictures, in order
+    val playback: SlideshowPlayback = SlideshowPlayback()
+)
+
+/**
+ * How a slideshow plays. Applied when the widget is drawn, so changing it never remakes frames.
+ */
+private data class SlideshowPlayback(
+    val shuffle: Boolean = false,
+    val seconds: Int = SlideTiming.DEFAULT, // time per picture
+    val transition: Transition = Transition.FADE
+)
+
+/** Pictures added to a slideshow, and the first problem (if some couldn't be read). */
+private class SlideImport(val slides: List<Slide>, val error: IOException?)
 
 /** Long enough for a real name, short enough to show on a card. */
 private const val MAX_NAME_LENGTH = 40
@@ -506,6 +646,7 @@ private class OpenedVideo(val source: VideoSource, val uri: Uri, val file: Impor
 @Composable
 private fun EditorScreen(
     saved: SavedSettings,
+    slideshow: Boolean,
     onHomeScreen: Boolean,
     widgetAspectRatio: Float,
     fpsCap: Int,
@@ -517,6 +658,8 @@ private fun EditorScreen(
     videoThumbnail: suspend (OpenedVideo, Long) -> Bitmap?,
     prepareVideo: suspend (OpenedVideo, Long, Long, (Int, Int) -> Unit) -> StoredGif,
     save: suspend (StoredGif, EditorSettings, Boolean, Float, (Int, Int) -> Unit) -> Unit,
+    prepareSlides: suspend (List<Uri>, (Int, Int) -> Unit) -> SlideImport,
+    saveSlideshow: suspend (List<Slide>, EditorSettings, SlideshowPlayback, Boolean, (Int, Int) -> Unit) -> Unit,
     onClose: () -> Unit,
     onSaved: () -> Unit
 ) {
@@ -537,6 +680,9 @@ private fun EditorScreen(
     val library = rememberShapeLibrary()
     // Fill: the picture is locked until you tap "Reposition" (no accidental moves). Cancel goes back here.
     var repositioning by remember { mutableStateOf(false) }
+    // Slideshow: the picture being repositioned, and a Fit / Fill for all waiting for "Reset custom crops?".
+    var repositioningSlideId by remember { mutableStateOf<Long?>(null) }
+    var presetForAll by remember { mutableStateOf<ScaleMode?>(null) }
     var cropBeforeReposition by remember { mutableStateOf(cropCenter) }
     // Your own zoom (1 = Fill), or null while a Fit / Fill preset is used. Cancel goes back to these.
     var customZoom by remember { mutableStateOf(saved.settings.zoom) }
@@ -571,10 +717,20 @@ private fun EditorScreen(
     var trimming by remember { mutableStateOf<OpenedVideo?>(null) } // video waiting for its clip
     var videoJob by remember { mutableStateOf<Job?>(null) } // running frame extraction (cancellable)
 
+    // Slideshow: its pictures in order, the one shown in the preview, and Shuffle.
+    var slides by remember { mutableStateOf(saved.slides) }
+    var selectedSlideId by remember { mutableStateOf(saved.slides.firstOrNull()?.id) }
+    var shuffle by remember { mutableStateOf(saved.playback.shuffle) }
+    var slideSeconds by remember { mutableIntStateOf(saved.playback.seconds) }
+    var transition by remember { mutableStateOf(saved.playback.transition) }
+    fun currentPlayback() = SlideshowPlayback(shuffle, slideSeconds, transition)
+    val selectedSlide = slides.firstOrNull { it.id == selectedSlideId } ?: slides.firstOrNull()
+
     // The preview plays the master frames: of the new pick, or of what the widget uses now.
-    val shownGif = picked ?: saved.gif
-    val master = shownGif?.master
-    val image = rememberFramePlayer(master?.let { framesDir(it.version) }, master, maxSidePx = 1080, speed, fpsCap)
+    // A slideshow shows the picture picked in its grid.
+    val shownGif = if (slideshow) null else picked ?: saved.gif
+    val master = if (slideshow) selectedSlide?.master else shownGif?.master
+    val image = rememberFramePlayer(master?.let { framesDir(it.version) }, master, maxSidePx = 1080, if (slideshow) 1f else speed, fpsCap)
 
     // Zoom: the box is the shape's box, or the whole widget without a shape. Fit and Fill are two
     // points on the same scale (Fill = 1), so the preview always uses the zoom math (Zoom.box).
@@ -585,11 +741,20 @@ private fun EditorScreen(
     val fitZoom = master?.let { Zoom.fitZoom(it.width.toFloat(), it.height.toFloat(), boxAspect) } ?: 1f
     val minZoom = fitZoom * Zoom.MIN_OF_FIT
     val maxZoom = master?.let {
-        Zoom.maxZoom(it.width.toFloat(), it.height.toFloat(), boxAspect, outputSidePx(drawnShape, it.frameCount, boxAspect))
+        // (A slideshow's pictures share the RAM budget like an animation's frames.)
+        val frameCount = if (slideshow) slides.size else it.frameCount
+        Zoom.maxZoom(it.width.toFloat(), it.height.toFloat(), boxAspect, outputSidePx(drawnShape, frameCount, boxAspect))
     } ?: 1f
-    val zoom = customZoom ?: if (scaleMode == ScaleMode.FIT) fitZoom else 1f
+    // (A slideshow picture with its own Reposition shows that; while repositioning, customZoom is used.)
+    val slideCrop = if (slideshow) selectedSlide?.takeIf { it.custom } else null
+    val zoom = customZoom ?: slideCrop?.zoom ?: if (scaleMode == ScaleMode.FIT) fitZoom else 1f
     // A Fit preset is always centered (as before zoom existed).
-    val shownCenter = if (customZoom == null && scaleMode == ScaleMode.FIT) Offset(0.5f, 0.5f) else cropCenter
+    val shownCenter = when {
+        customZoom != null -> cropCenter
+        slideCrop != null -> Offset(slideCrop.centerX, slideCrop.centerY)
+        slideshow || scaleMode == ScaleMode.FIT -> Offset(0.5f, 0.5f)
+        else -> cropCenter
+    }
     val centered = kotlin.math.abs(shownCenter.x - 0.5f) < 0.002f && kotlin.math.abs(shownCenter.y - 0.5f) < 0.002f
     // Which preset button is lit: none when the zoom is anywhere else.
     val preset = when {
@@ -603,6 +768,7 @@ private fun EditorScreen(
     // These are functions (not values worked out while drawing), so the Save button always gets the
     // live answer: it once kept an old "nothing changed" and closed without saving a new zoom.
     fun remakeFrames() = picked != null ||
+        (slideshow && slides != saved.slides) ||
         saved.gif?.frames == null ||
         customZoom != saved.settings.zoom ||
         (shape != null && currentStyle() != saved.settings.style) ||
@@ -618,7 +784,8 @@ private fun EditorScreen(
     fun hasChanges() = remakeFrames() ||
         background != saved.settings.background ||
         name != saved.settings.name ||
-        speed != saved.settings.speed
+        speed != saved.settings.speed ||
+        (slideshow && currentPlayback() != saved.playback)
 
     // Don't leave halfway through preparing or saving. While taking frames from a video,
     // Back cancels instead (like the Cancel button).
@@ -630,6 +797,16 @@ private fun EditorScreen(
 
     fun startReposition() {
         val fit = latestFitZoom
+        if (slideshow) {
+            // Slideshow: Reposition moves only the picture shown (the one tapped in the grid). Its own
+            // crop, or the slideshow's Fit / Fill, becomes the starting point.
+            val slide = slides.firstOrNull { it.id == selectedSlideId } ?: slides.firstOrNull() ?: return
+            repositioningSlideId = slide.id
+            customZoom = slide.zoom ?: if (scaleMode == ScaleMode.FIT) fit else 1f
+            cropCenter = if (slide.custom) Offset(slide.centerX, slide.centerY) else Offset(0.5f, 0.5f)
+            repositioning = true
+            return
+        }
         val usesFitPreset = customZoom == null && scaleMode == ScaleMode.FIT
         cropBeforeReposition = cropCenter
         zoomBeforeReposition = customZoom
@@ -641,6 +818,29 @@ private fun EditorScreen(
     }
 
     fun endReposition(keep: Boolean) {
+        if (slideshow) {
+            val id = repositioningSlideId
+            val z = customZoom
+            if (keep && id != null && z != null) {
+                // Exactly the slideshow's own Fit / Fill (centered)? Then it just follows it again.
+                val isCentered = kotlin.math.abs(cropCenter.x - 0.5f) < 0.002f && kotlin.math.abs(cropCenter.y - 0.5f) < 0.002f
+                val presetZoom = if (scaleMode == ScaleMode.FIT) latestFitZoom else 1f
+                val center = cropCenter
+                slides = slides.map { slide ->
+                    when {
+                        slide.id != id -> slide
+                        z == presetZoom && isCentered -> slide.reset()
+                        else -> slide.copy(zoom = z, centerX = center.x, centerY = center.y)
+                    }
+                }
+            }
+            // Cancel: the picture keeps what it had. Either way the working values go back to neutral.
+            customZoom = null
+            cropCenter = Offset(0.5f, 0.5f)
+            repositioningSlideId = null
+            repositioning = false
+            return
+        }
         if (keep) {
             val fit = latestFitZoom
             val isCentered = kotlin.math.abs(cropCenter.x - 0.5f) < 0.002f && kotlin.math.abs(cropCenter.y - 0.5f) < 0.002f
@@ -727,7 +927,64 @@ private fun EditorScreen(
         }
     }
 
+    // Slideshow: pictures picked in the gallery or Files are added at the end (up to MAX_SLIDES).
+    val tooManyMessage = stringResource(R.string.slideshow_too_many, MAX_SLIDES)
+    fun onSlidesPicked(uris: List<Uri>) {
+        if (uris.isEmpty()) return // You closed the picker without choosing.
+        val room = MAX_SLIDES - slides.size
+        val wanted = uris.take(room)
+        if (wanted.isEmpty()) return
+        scope.launch {
+            busy = Busy.Preparing(0, wanted.size)
+            error = null
+            try {
+                val result = prepareSlides(wanted) { done, total -> busy = Busy.Preparing(done, total) }
+                slides = slides + result.slides
+                result.slides.firstOrNull()?.let { selectedSlideId = it.id } // show the first new one
+                error = result.error?.friendlyMessage(context) ?: if (uris.size > room) tooManyMessage else null
+            } finally {
+                busy = null
+            }
+        }
+    }
+
+    fun removeSlide(id: Long) {
+        val index = slides.indexOfFirst { it.id == id }
+        if (index < 0) return
+        slides = slides.filterNot { it.id == id }
+        // The preview moves to the picture that took its place (or the new last one).
+        if (selectedSlideId == id) selectedSlideId = slides.getOrNull(index.coerceAtMost(slides.lastIndex))?.id
+    }
+
+    fun onSaveSlideshow() {
+        if (slides.isEmpty()) return
+        if (!hasChanges()) {
+            onSaved()
+            return
+        }
+        scope.launch {
+            busy = Busy.Saving(0, 0)
+            error = null
+            try {
+                val settings = EditorSettings(
+                    name, scaleMode, Offset(0.5f, 0.5f), roundCorners, shape, null, null, currentStyle(), background, 1f
+                )
+                saveSlideshow(slides, settings, currentPlayback(), remakeFrames()) { done, total ->
+                    busy = Busy.Saving(done, total)
+                }
+                onSaved()
+            } catch (e: IOException) {
+                error = e.friendlyMessage(context)
+                busy = null
+            }
+        }
+    }
+
     fun onSave() {
+        if (slideshow) {
+            onSaveSlideshow()
+            return
+        }
         val gif = picked ?: saved.gif ?: return
         if (!hasChanges()) {
             onSaved()
@@ -757,6 +1014,13 @@ private fun EditorScreen(
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { onPicked(it) }
+    // Slideshow: the same two, picking several pictures at once (pictures only, no videos).
+    val slidePhotoPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(MAX_SLIDES)
+    ) { onSlidesPicked(it) }
+    val slideFilePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { onSlidesPicked(it) }
 
     // A shape was picked (built-in, or from the library). Only the preview changes until Save.
     val pickShape: (WidgetShape?) -> Unit = { picked ->
@@ -764,7 +1028,7 @@ private fun EditorScreen(
         val first = shape == null && picked != null && !shapeRepositionShown
         shape = picked
         // Picking a shape changes what fits, so show where the shape sits right away.
-        if (first && image != null && !repositioning) {
+        if (first && image != null && !repositioning && !slideshow) {
             shapeRepositionShown = true
             openRepositionSoon = true
         }
@@ -780,6 +1044,21 @@ private fun EditorScreen(
             pickShape(added)
         }
     )
+
+    // Fit / Fill for all, with pictures repositioned by hand: confirm before undoing them.
+    presetForAll?.let { mode ->
+        ResetCropsDialog(
+            count = slides.count { it.custom },
+            fit = mode == ScaleMode.FIT,
+            onReset = {
+                slides = slides.map { it.reset() }
+                scaleMode = mode
+                customZoom = null
+                presetForAll = null
+            },
+            onDismiss = { presetForAll = null }
+        )
+    }
 
     trimming?.let { video ->
         TrimDialog(
@@ -800,7 +1079,15 @@ private fun EditorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(if (saved.gif == null) R.string.editor_title_new else R.string.editor_title_edit)) },
+                title = {
+                    val title = when {
+                        slideshow && saved.gif == null -> R.string.editor_title_new_slideshow
+                        slideshow -> R.string.editor_title_edit_slideshow
+                        saved.gif == null -> R.string.editor_title_new
+                        else -> R.string.editor_title_edit
+                    }
+                    Text(stringResource(title))
+                },
                 navigationIcon = {
                     IconButton(onClick = onClose, enabled = busy == null) {
                         Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.editor_close))
@@ -859,7 +1146,7 @@ private fun EditorScreen(
                         squareCorners = shape == null && WidgetSizes.needsRoundedFrames &&
                             (scaleMode == ScaleMode.FILL || customZoom != null) && !roundCorners,
                         // The CD spins in the preview too, as fast as on the widget (speed included).
-                        spinMs = WidgetFrames.spinFor(drawnShape, spin)?.let { (it * 1000 / speed).roundToInt() }
+                        spinMs = if (slideshow) null else WidgetFrames.spinFor(drawnShape, spin)?.let { (it * 1000 / speed).roundToInt() }
                     )
                 }
 
@@ -870,74 +1157,105 @@ private fun EditorScreen(
                         .padding(horizontal = 20.dp, vertical = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        text = when {
-                            shownGif == null -> stringResource(R.string.editor_nothing_picked)
-                            master == null -> shownGif.name
-                            master.frameCount == 1 -> stringResource(
-                                R.string.editor_info_still,
-                                shownGif.name, master.width, master.height,
-                                Formatter.formatShortFileSize(context, shownGif.sizeBytes)
-                            )
-                            else -> pluralStringResource(
-                                R.plurals.editor_info_frames,
-                                master.sourceFrameCount,
-                                shownGif.name, master.sourceFrameCount,
-                                Formatter.formatShortFileSize(context, shownGif.sizeBytes)
-                            )
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    if (shownGif != null) {
-                        Spacer(Modifier.height(16.dp))
-                        OutlinedTextField(
-                            value = name,
-                            onValueChange = {
+                    if (slideshow) {
+                        SlideshowSection(
+                            slides = slides,
+                            selectedId = selectedSlide?.id,
+                            name = name,
+                            shuffle = shuffle,
+                            seconds = slideSeconds,
+                            transition = transition,
+                            // (Finish repositioning first: Done or Cancel.)
+                            enabled = busy == null && !repositioning,
+                            thumbnailFile = { slide -> File(framesDir(slide.id), FrameFiles.frameFileName(0)) },
+                            onName = {
                                 name = it.take(MAX_NAME_LENGTH)
                                 nameEdited = true
                             },
-                            label = { Text(stringResource(R.string.editor_name)) },
-                            placeholder = { Text(WidgetStore.defaultName(shownGif.name)) },
-                            singleLine = true,
-                            enabled = busy == null,
-                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
-                            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                            modifier = Modifier.fillMaxWidth()
+                            onDoneTyping = { focusManager.clearFocus() },
+                            onSelect = { selectedSlideId = it },
+                            onRemove = { removeSlide(it) },
+                            onMove = { from, to ->
+                                slides = slides.toMutableList().apply { add(to, removeAt(from)) }
+                            },
+                            onGallery = {
+                                slidePhotoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            },
+                            onFiles = { slideFilePicker.launch(arrayOf("image/*")) },
+                            onShuffle = { shuffle = it },
+                            onSeconds = { slideSeconds = it },
+                            onTransition = { transition = it }
                         )
-                    }
-
-                    Spacer(Modifier.height(20.dp))
-                    SectionTitle(stringResource(if (shownGif == null) R.string.editor_pick else R.string.editor_change))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                        FilledTonalButton(
-                            onClick = {
-                                photoPicker.launch(
-                                    PickVisualMediaRequest(
-                                        ActivityResultContracts.PickVisualMedia.ImageAndVideo // pictures, GIFs, videos
-                                    )
+                    } else {
+                        Text(
+                            text = when {
+                                shownGif == null -> stringResource(R.string.editor_nothing_picked)
+                                master == null -> shownGif.name
+                                master.frameCount == 1 -> stringResource(
+                                    R.string.editor_info_still,
+                                    shownGif.name, master.width, master.height,
+                                    Formatter.formatShortFileSize(context, shownGif.sizeBytes)
+                                )
+                                else -> pluralStringResource(
+                                    R.plurals.editor_info_frames,
+                                    master.sourceFrameCount,
+                                    shownGif.name, master.sourceFrameCount,
+                                    Formatter.formatShortFileSize(context, shownGif.sizeBytes)
                                 )
                             },
-                            enabled = busy == null,
-                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(painterResource(R.drawable.ic_photo_library), null, Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.editor_gallery))
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        if (shownGif != null) {
+                            Spacer(Modifier.height(16.dp))
+                            OutlinedTextField(
+                                value = name,
+                                onValueChange = {
+                                    name = it.take(MAX_NAME_LENGTH)
+                                    nameEdited = true
+                                },
+                                label = { Text(stringResource(R.string.editor_name)) },
+                                placeholder = { Text(WidgetStore.defaultName(shownGif.name)) },
+                                singleLine = true,
+                                enabled = busy == null,
+                                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
+                                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
-                        OutlinedButton(
-                            onClick = { filePicker.launch(arrayOf("image/*", "video/*")) },
-                            enabled = busy == null,
-                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(painterResource(R.drawable.ic_folder), null, Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.editor_files))
+
+                        Spacer(Modifier.height(20.dp))
+                        SectionTitle(stringResource(if (shownGif == null) R.string.editor_pick else R.string.editor_change))
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                            FilledTonalButton(
+                                onClick = {
+                                    photoPicker.launch(
+                                        PickVisualMediaRequest(
+                                            ActivityResultContracts.PickVisualMedia.ImageAndVideo // pictures, GIFs, videos
+                                        )
+                                    )
+                                },
+                                enabled = busy == null,
+                                contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(painterResource(R.drawable.ic_photo_library), null, Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.editor_gallery))
+                            }
+                            OutlinedButton(
+                                onClick = { filePicker.launch(arrayOf("image/*", "video/*")) },
+                                enabled = busy == null,
+                                contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(painterResource(R.drawable.ic_folder), null, Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.editor_files))
+                            }
                         }
                     }
 
@@ -953,6 +1271,9 @@ private fun EditorScreen(
                                         // Keep repositioning, just jump to the preset's zoom (Fit is centered).
                                         customZoom = if (mode == ScaleMode.FIT) fitZoom else 1f
                                         if (mode == ScaleMode.FIT) cropCenter = Offset(0.5f, 0.5f)
+                                    } else if (slideshow && slides.any { it.custom }) {
+                                        // Fit / Fill for all would undo pictures you repositioned: ask first.
+                                        presetForAll = mode
                                     } else {
                                         scaleMode = mode
                                         customZoom = null
@@ -970,8 +1291,8 @@ private fun EditorScreen(
                         Text(
                             stringResource(
                                 when (preset) {
-                                    ScaleMode.FIT -> R.string.editor_fit_description
-                                    ScaleMode.FILL -> R.string.editor_fill_description
+                                    ScaleMode.FIT -> if (slideshow) R.string.slideshow_fit_description else R.string.editor_fit_description
+                                    ScaleMode.FILL -> if (slideshow) R.string.slideshow_fill_description else R.string.editor_fill_description
                                     null -> R.string.editor_zoom_description
                                 }
                             ),
@@ -979,7 +1300,7 @@ private fun EditorScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f)
                         )
-                        AnimatedVisibility(visible = !repositioning && preset != ScaleMode.FIT && !centered) {
+                        AnimatedVisibility(visible = !repositioning && preset != ScaleMode.FIT && !centered && !slideshow) {
                             TextButton(onClick = { cropCenter = Offset(0.5f, 0.5f) }, enabled = busy == null) {
                                 Icon(painterResource(R.drawable.ic_recenter), null, Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
@@ -1014,7 +1335,7 @@ private fun EditorScreen(
                     }
 
                     // Only for the CD (and not reversed): one small switch, and the speed only once it's on.
-                    AnimatedVisibility(visible = drawnShape?.spins == true) {
+                    AnimatedVisibility(visible = drawnShape?.spins == true && !slideshow) {
                         SpinControls(spin, enabled = busy == null, onChange = { spin = it })
                     }
 
@@ -1043,7 +1364,7 @@ private fun EditorScreen(
                     }
 
                     // Speed only matters for animations, not still pictures.
-                    if (master != null && master.frameCount > 1) {
+                    if (!slideshow && master != null && master.frameCount > 1) {
                         Spacer(Modifier.height(24.dp))
                         SectionTitle(stringResource(R.string.editor_speed))
                         SpeedPicker(speed, master, fpsCap, enabled = busy == null, onChange = { speed = it })
@@ -1065,7 +1386,7 @@ private fun EditorScreen(
 }
 
 @Composable
-private fun SectionTitle(text: String) {
+internal fun SectionTitle(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.titleSmall,

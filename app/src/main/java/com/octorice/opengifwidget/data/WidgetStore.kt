@@ -15,6 +15,60 @@ data class StoredGif(
     val master: FrameSet? = null  // the uncropped master frames everything is made from
 )
 
+/**
+ * One picture of a slideshow: its own master frame (one still, uncropped) and where it came from.
+ * [master]'s version (its folder name) is unique, so it also identifies the picture.
+ * [zoom] = this picture's own Reposition (1 = Fill, see Zoom) with its center ([centerX], [centerY],
+ * 0..1), or null to follow the slideshow's Fit / Fill, centered.
+ */
+data class Slide(
+    val master: FrameSet,
+    val name: String,
+    val sizeBytes: Long,
+    val zoom: Float? = null,
+    val centerX: Float = 0.5f,
+    val centerY: Float = 0.5f
+) {
+    val id: Long get() = master.version
+
+    /** Repositioned by hand (Fit / Fill for all resets it). */
+    val custom: Boolean get() = zoom != null
+
+    /** Back to following the slideshow's Fit / Fill. */
+    fun reset(): Slide = copy(zoom = null, centerX = 0.5f, centerY = 0.5f)
+}
+
+/**
+ * How a slideshow changes from one picture to the next. Each is a flipper animation in the widget's
+ * layout (res/anim), played by the launcher itself: no extra frames, no extra RAM.
+ */
+enum class Transition {
+    NONE,  // the next picture just appears
+    FADE,  // the next picture fades in over the old one, then the old one fades away (never darker)
+    SLIDE  // the next picture slides in from the right, pushing the old one out
+}
+
+/**
+ * "Time per picture" choices, in seconds. Up to a minute the launcher flips the pictures itself
+ * (fast mode). From 5 minutes on ([SLOW_FROM]) the widget shows one picture and a timer redraws it
+ * with the next one (slow mode, see SlowSlideshow): the launcher's flipper restarts its countdown
+ * every time the home screen comes back, so it would never get through an hour.
+ */
+object SlideTiming {
+    val CHOICES = listOf(
+        1, 2, 3, 5, 10, 15, 30, 60,                         // fast
+        5 * 60, 15 * 60, 30 * 60,                           // slow: minutes
+        3600, 3 * 3600, 6 * 3600, 12 * 3600, 24 * 3600      // slow: hours, 1 day
+    )
+    const val DEFAULT = 5
+    const val SLOW_FROM = 5 * 60
+
+    fun isSlow(seconds: Int): Boolean = seconds >= SLOW_FROM
+
+    /** The choice closest to [seconds] (older or odd values never break anything). */
+    fun nearest(seconds: Int): Int = CHOICES.minBy { kotlin.math.abs(it - seconds) }
+}
+
 /** How a picture is shown when its shape doesn't match the widget's shape. */
 enum class ScaleMode {
     FIT,  // show the whole picture, with empty space around it
@@ -64,7 +118,107 @@ object WidgetStore {
     /** Every frame folder this widget uses, so all others can be deleted. */
     fun usedFrameVersions(context: Context, appWidgetId: Int): Set<Long> {
         val gif = getGif(context, appWidgetId) ?: return emptySet()
-        return setOfNotNull(gif.frames?.version, gif.master?.version)
+        return setOfNotNull(gif.frames?.version, gif.master?.version) + getSlides(context, appWidgetId).map { it.id }
+    }
+
+    /**
+     * A slideshow's pictures, in the order they play (empty for normal widgets). Each picture has its
+     * own master folder; they're stored as a small JSON list in "slides_<id>".
+     */
+    fun getSlides(context: Context, appWidgetId: Int): List<Slide> {
+        val json = prefs(context).getString("slides_$appWidgetId", null) ?: return emptyList()
+        return try {
+            val array = org.json.JSONArray(json)
+            List(array.length()) { i ->
+                val item = array.getJSONObject(i)
+                Slide(
+                    master = FrameSet(
+                        version = item.getLong("v"),
+                        frameCount = 1,
+                        sourceFrameCount = 1,
+                        intervalMs = 1000,
+                        width = item.getInt("w"),
+                        height = item.getInt("h")
+                    ),
+                    name = item.optString("name"),
+                    sizeBytes = item.optLong("size"),
+                    zoom = if (item.has("z")) item.getDouble("z").toFloat() else null,
+                    centerX = item.optDouble("cx", 0.5).toFloat(),
+                    centerY = item.optDouble("cy", 0.5).toFloat()
+                )
+            }
+        } catch (e: org.json.JSONException) {
+            emptyList() // never crash on a damaged list
+        }
+    }
+
+    fun saveSlides(context: Context, appWidgetId: Int, slides: List<Slide>) {
+        val array = org.json.JSONArray()
+        for (slide in slides) {
+            val item = org.json.JSONObject()
+                .put("v", slide.master.version)
+                .put("w", slide.master.width)
+                .put("h", slide.master.height)
+                .put("name", slide.name)
+                .put("size", slide.sizeBytes)
+            // Only a repositioned picture stores its zoom and center.
+            slide.zoom?.let { item.put("z", it.toDouble()).put("cx", slide.centerX.toDouble()).put("cy", slide.centerY.toDouble()) }
+            array.put(item)
+        }
+        prefs(context).edit { putString("slides_$appWidgetId", array.toString()) }
+    }
+
+    /** Slideshow: how many seconds each picture stays up (one of [SlideTiming.CHOICES]). 5 s by default. */
+    fun getSlideSeconds(context: Context, appWidgetId: Int): Int =
+        SlideTiming.nearest(prefs(context).getInt("slide_seconds_$appWidgetId", SlideTiming.DEFAULT))
+
+    fun saveSlideSeconds(context: Context, appWidgetId: Int, seconds: Int) {
+        prefs(context).edit { putInt("slide_seconds_$appWidgetId", SlideTiming.nearest(seconds)) }
+    }
+
+    /**
+     * Slow slideshows: where they are. [position] = place in [order] (the frame numbers in play
+     * order; empty = 0, 1, 2, ... without Shuffle), [changedAt] = when the current picture appeared
+     * (wall-clock ms, 0 = never).
+     */
+    data class SlidePosition(val position: Int, val order: List<Int>, val changedAt: Long)
+
+    fun getSlidePosition(context: Context, appWidgetId: Int): SlidePosition {
+        val prefs = prefs(context)
+        val order = prefs.getString("slide_order_$appWidgetId", null)
+            ?.split(',')?.mapNotNull { it.toIntOrNull() }.orEmpty()
+        return SlidePosition(
+            prefs.getInt("slide_pos_$appWidgetId", 0),
+            order,
+            prefs.getLong("slide_changed_$appWidgetId", 0L)
+        )
+    }
+
+    fun saveSlidePosition(context: Context, appWidgetId: Int, position: SlidePosition) {
+        prefs(context).edit {
+            putInt("slide_pos_$appWidgetId", position.position)
+            if (position.order.isEmpty()) remove("slide_order_$appWidgetId")
+            else putString("slide_order_$appWidgetId", position.order.joinToString(","))
+            putLong("slide_changed_$appWidgetId", position.changedAt)
+        }
+    }
+
+    /** Slideshow: how one picture changes into the next. Fade by default. */
+    fun getTransition(context: Context, appWidgetId: Int): Transition {
+        val name = prefs(context).getString("transition_$appWidgetId", null)
+        return Transition.entries.firstOrNull { it.name == name } ?: Transition.FADE
+    }
+
+    fun saveTransition(context: Context, appWidgetId: Int, transition: Transition) {
+        prefs(context).edit { putString("transition_$appWidgetId", transition.name) }
+    }
+
+    /** Slideshow: play the pictures in a new random order every time the widget is drawn. Off by default. */
+    fun getShuffle(context: Context, appWidgetId: Int): Boolean =
+        prefs(context).getBoolean("shuffle_$appWidgetId", false)
+
+    fun saveShuffle(context: Context, appWidgetId: Int, shuffle: Boolean) {
+        prefs(context).edit { if (shuffle) putBoolean("shuffle_$appWidgetId", true) else remove("shuffle_$appWidgetId") }
     }
 
     /** Forgets everything about one widget (every key ends with "_<widgetId>"). */

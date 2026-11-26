@@ -179,6 +179,40 @@ RemoteViews can't play GIFs directly, so:
   sometimes keep "ghost" ids from cancelled setups (OnePlus: adding from the home screen widget menu, then cancelling
   the editor). So the editor sets `hidden_<id>` itself when it closes without saving and the widget has no picture.
   Launchers usually clean ghosts up on restart (then onDeleted runs).
+- Slideshow (v1.1, in progress): a second widget kind. `SlideshowWidgetProvider` (empty subclass of the `open`
+  `GifWidgetProvider`, own receiver + `xml/slideshow_widget_info.xml` + `widget_preview_slideshow`) so the launcher's
+  widget list shows two entries. `GifWidgetProvider.isSlideshow(context, id)` asks the launcher which kind a widget is;
+  ALWAYS list widgets with `GifWidgetProvider.allWidgetIds` (both kinds), never `getAppWidgetIds` of one class
+  (the onUpdate sweep / onDisabled would delete the other kind's files). Main screen: "Add widget" splits into
+  "Normal widget" / "Slideshow". Transitions = the flipper's inAnimation/outAnimation (free, tested on OnePlus: Android
+  fade, slide, and a crossfade that fades the new picture in during the first half and the old one out during the
+  second, because the flipper stacks children in list order). RemoteViews can't set animations from code, so
+  `widget_gif.xml` has one flipper per transition (`widget_flipper` = none, `widget_flipper_fade`, `widget_flipper_slide`,
+  anims in `res/anim/slideshow_*`); `showOnlyFlipper` always sets all their visibilities. Time per picture
+  (`slide_seconds_<id>`, `SlideTiming.CHOICES` 1-60 s, default 5) and `transition_<id>` (default FADE) are applied at
+  draw time (never remake frames); `HomeData` copies the time into the card's FrameSet.intervalMs.
+  - Slow mode (`SlideTiming.isSlow`: 5 min, 15, 30 min, 1, 3, 6, 12 h, 1 day): `widget/SlowSlideshow.kt`. The widget
+    shows ONE frame (still path) = `currentFrame` (`slide_pos_<id>`, `slide_order_<id>` with Shuffle, `slide_changed_<id>`);
+    every redraw (re)sets an inexact non-waking alarm (`AlarmManager.set(RTC)`, requestCode = widget id, no permission)
+    for changedAt + interval -> `NextPictureReceiver` advances + redraws. Overdue alarms fire when the phone is used again;
+    reboot clears alarms, RestoreWidgetsReceiver's redraw sets them again. Non-slow redraws / onDeleted cancel it.
+    Save restarts at picture 1 when pictures or playback changed. RAM: `widgetCost(onePicture = true)` = 1 frame.
+  - Pictures only (a GIF becomes its first frame), max 20 (`MAX_SLIDES`). Each picture = its own still master folder
+    (`Slide(master, name, sizeBytes)`, id = master version; `GifStorage.newVersion()` keeps versions unique when several
+    are imported at once). `slides_<id>` = JSON list in play order (`WidgetStore.getSlides/saveSlides`, counted by
+    `usedFrameVersions`), `shuffle_<id>`. The saved `StoredGif` has no master; its widget frames = one frame per picture
+    (`FrameExtractor.deriveSlideshowFrames`: every picture Fit/Fill-ed, centered, into the same box, so frames are
+    `boxed`, same size; shape/mask/shine/corners like normal frames; budget shared). `WidgetFrames.makeSlideshow` /
+    `refreshIfNeeded` (slideshows also re-cut on widget aspect changes in Fit). Widget: speed ignored, Shuffle =
+    `plan.frames.shuffled()` at every redraw. Editor (`config/SlideshowUi.kt`): preview shows the tapped picture; grid
+    (long-press drag to reorder, x on the tapped one), Gallery/Files multi-pick, Shuffle; no spin/speed.
+  - Per-picture Reposition: `Slide.zoom` (null = follow Fit/Fill, centered) + `centerX/Y` (JSON "z"/"cx"/"cy", only when
+    custom). Reposition in the editor moves the TAPPED picture (`repositioningSlideId`; customZoom/cropCenter are only
+    working values, reset to null/center after Done/Cancel; Done on exactly the preset + centered = `reset()`). Grid
+    is disabled while repositioning; repositioned tiles show a small mark. Fit/Fill for all with custom crops ->
+    `ResetCropsDialog` ("Reset N custom crops?"). Frames: `SlidePicture` carries each picture's zoom/center into
+    `deriveSlideshowFrames` (same `Zoom.box` math as the preview).
+    Removed pictures' folders are deleted on Save or when the editor closes (unsaved picks are NOT discarded per pick).
 - New widgets default to Fill.
 - Widget shape (`WidgetSizes.currentSizeDp`): portrait = min width x max height, landscape = max width x min height.
   Landscape only counts on big screens (smallestScreenWidthDp >= 600, e.g. tablets): phone home screens stay portrait
