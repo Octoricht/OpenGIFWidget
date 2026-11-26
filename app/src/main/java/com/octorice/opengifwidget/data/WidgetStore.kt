@@ -82,6 +82,9 @@ enum class ScaleMode {
 data class WidgetBackground(val color: Int, val alpha: Int) {
     companion object {
         val DEFAULT = WidgetBackground(color = 0xFF202020.toInt(), alpha = 0xCC)
+
+        /** New slideshows start transparent (the pictures fill the widget themselves). */
+        val SLIDESHOW_DEFAULT = DEFAULT.copy(alpha = 0)
     }
 }
 
@@ -413,12 +416,19 @@ object WidgetStore {
         }
     }
 
-    /** The widget's background color and opacity. Dark at 80% by default (the original look). */
-    fun getBackground(context: Context, appWidgetId: Int): WidgetBackground {
+    /**
+     * The widget's background color and opacity. [default] is used until one is saved: dark at 80%
+     * (the original look), or transparent for new slideshows.
+     */
+    fun getBackground(
+        context: Context,
+        appWidgetId: Int,
+        default: WidgetBackground = WidgetBackground.DEFAULT
+    ): WidgetBackground {
         val prefs = prefs(context)
         return WidgetBackground(
-            color = prefs.getInt("bg_color_$appWidgetId", WidgetBackground.DEFAULT.color),
-            alpha = prefs.getInt("bg_alpha_$appWidgetId", WidgetBackground.DEFAULT.alpha)
+            color = prefs.getInt("bg_color_$appWidgetId", default.color),
+            alpha = prefs.getInt("bg_alpha_$appWidgetId", default.alpha)
         )
     }
 

@@ -1,5 +1,6 @@
 package com.octorice.opengifwidget.settings
 
+import com.octorice.opengifwidget.ui.rememberHaptics
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -96,6 +97,7 @@ class SettingsActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsScreen(onBack: () -> Unit) {
+    val haptics = rememberHaptics()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
@@ -140,6 +142,7 @@ private fun SettingsScreen(onBack: () -> Unit) {
                             // Caps above what this phone handles well are shown but turned off.
                             enabled = fps <= maxFpsCap,
                             onClick = {
+                                if (fpsCap != fps) haptics.pick()
                                 fpsCap = fps
                                 // Save, then redraw every widget so the new cap applies right away.
                                 scope.launch {
@@ -262,6 +265,7 @@ private fun SettingsScreen(onBack: () -> Unit) {
  */
 @Composable
 private fun YourShapes() {
+    val haptics = rememberHaptics()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val library = rememberShapeLibrary()
@@ -342,6 +346,7 @@ private fun YourShapes() {
             },
             confirmButton = {
                 TextButton(onClick = {
+                    haptics.confirm()
                     confirming = null
                     deleting = true
                     scope.launch {

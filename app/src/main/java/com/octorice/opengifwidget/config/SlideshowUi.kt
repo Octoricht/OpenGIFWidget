@@ -1,5 +1,6 @@
 package com.octorice.opengifwidget.config
 
+import com.octorice.opengifwidget.ui.rememberHaptics
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animateFloatAsState
@@ -61,11 +62,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -124,6 +123,7 @@ internal fun SlideshowSection(
     onGallery: () -> Unit,
     onFiles: () -> Unit
 ) {
+    val haptics = rememberHaptics()
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             if (slides.isEmpty()) {
@@ -168,7 +168,7 @@ internal fun SlideshowSection(
         val canAdd = enabled && slides.size < MAX_SLIDES
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             FilledTonalButton(
-                onClick = onGallery,
+                onClick = { haptics.press(); onGallery() },
                 enabled = canAdd,
                 contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
                 modifier = Modifier.weight(1f)
@@ -178,7 +178,7 @@ internal fun SlideshowSection(
                 Text(stringResource(R.string.editor_gallery))
             }
             OutlinedButton(
-                onClick = onFiles,
+                onClick = { haptics.press(); onFiles() },
                 enabled = canAdd,
                 contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
                 modifier = Modifier.weight(1f)
@@ -215,6 +215,7 @@ internal fun SlideshowPlayback(
     onTransition: (Transition) -> Unit,
     onShuffle: (Boolean) -> Unit
 ) {
+    val haptics = rememberHaptics()
     if (slideCount < 2) return
     Column {
         Spacer(Modifier.height(24.dp))
@@ -249,7 +250,7 @@ internal fun SlideshowPlayback(
                 )
             }
             Spacer(Modifier.width(12.dp))
-            Switch(checked = shuffle, onCheckedChange = onShuffle, enabled = enabled)
+            Switch(checked = shuffle, onCheckedChange = { haptics.toggle(it); onShuffle(it) }, enabled = enabled)
         }
     }
 }
@@ -260,12 +261,17 @@ internal fun SlideshowPlayback(
  */
 @Composable
 private fun TimePerPicture(seconds: Int, enabled: Boolean, onChange: (Int) -> Unit) {
+    val haptics = rememberHaptics()
     val choices = SlideTiming.CHOICES
     val index = choices.indexOf(SlideTiming.nearest(seconds))
     SliderLabel(stringResource(R.string.slideshow_time), timeLabel(seconds), icon = R.drawable.ic_duration)
     Slider(
         value = index.toFloat(),
-        onValueChange = { onChange(choices[it.roundToInt().coerceIn(0, choices.lastIndex)]) },
+        onValueChange = {
+            val new = choices[it.roundToInt().coerceIn(0, choices.lastIndex)]
+            haptics.step(choices[index.coerceAtLeast(0)], new)
+            onChange(new)
+        },
         valueRange = 0f..choices.lastIndex.toFloat(),
         steps = choices.size - 2, // one stop per choice
         enabled = enabled
@@ -276,6 +282,7 @@ private fun TimePerPicture(seconds: Int, enabled: Boolean, onChange: (Int) -> Un
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TransitionPicker(transition: Transition, enabled: Boolean, onTransition: (Transition) -> Unit) {
+    val haptics = rememberHaptics()
     Column {
         Spacer(Modifier.height(16.dp))
         Text(
@@ -289,7 +296,7 @@ private fun TransitionPicker(transition: Transition, enabled: Boolean, onTransit
             Transition.entries.forEachIndexed { index, option ->
                 SegmentedButton(
                     selected = transition == option,
-                    onClick = { onTransition(option) },
+                    onClick = { if (transition != option) haptics.pick(); onTransition(option) },
                     enabled = enabled,
                     shape = SegmentedButtonDefaults.itemShape(index, Transition.entries.size),
                     // Our picture of the transition replaces the usual checkmark (the color shows the pick).
@@ -363,7 +370,7 @@ private fun SlideGrid(
         val currentEnabled by rememberUpdatedState(enabled)
         var draggingId by remember { mutableStateOf<Long?>(null) }
         var dragPos by remember { mutableStateOf(Offset.Zero) } // the dragged tile's top-left, px
-        val haptics = LocalHapticFeedback.current
+        val haptics = rememberHaptics()
         val scope = rememberCoroutineScope()
 
         Box(
@@ -410,7 +417,7 @@ private fun SlideGrid(
                                         val from = currentSlides.indexOfFirst { it.id == slide.id }
                                         dragPos = slotOf(from)
                                         draggingId = slide.id
-                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        haptics.longPress()
                                     },
                                     onDrag = { change, amount ->
                                         if (draggingId != slide.id) return@detectDragGesturesAfterLongPress
@@ -425,7 +432,7 @@ private fun SlideGrid(
                                         val from = list.indexOfFirst { it.id == slide.id }
                                         if (from >= 0 && to != from) {
                                             currentOnMove(from, to)
-                                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            haptics.tick()
                                         }
                                     },
                                     onDragEnd = { finishDrag() },

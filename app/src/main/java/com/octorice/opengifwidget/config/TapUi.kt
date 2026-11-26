@@ -1,5 +1,6 @@
 package com.octorice.opengifwidget.config
 
+import com.octorice.opengifwidget.ui.rememberHaptics
 import android.content.ComponentName
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
@@ -76,6 +77,7 @@ internal fun TapSection(
     onAction: (TapAction) -> Unit,
     onPickApp: () -> Unit
 ) {
+    val haptics = rememberHaptics()
     // "Next picture" only in slow slideshows (5 min or more per picture), where the app itself decides
     // which picture is up. Fast ones flip on the launcher's own timer, which the app can't move on.
     val choices = if (showNext) TapAction.entries else TapAction.entries - TapAction.NEXT
@@ -84,7 +86,7 @@ internal fun TapSection(
         choices.forEachIndexed { index, choice ->
             SegmentedButton(
                 selected = action == choice,
-                onClick = { onAction(choice) },
+                onClick = { if (action != choice) haptics.pick(); onAction(choice) },
                 enabled = enabled,
                 shape = SegmentedButtonDefaults.itemShape(index, choices.size),
                 icon = {

@@ -71,6 +71,7 @@ private val Swatches = listOf(
 /** Color circles ("Transparent" first) and an opacity slider for the widget's background. */
 @Composable
 fun BackgroundPicker(background: WidgetBackground, enabled: Boolean, onChange: (WidgetBackground) -> Unit) {
+    val haptics = rememberHaptics()
     var pickingColor by remember { mutableStateOf(false) }
     // Picking a color after "Transparent" makes it visible again (solid).
     fun choose(color: Int) = onChange(WidgetBackground(color, if (background.alpha == 0) 255 else background.alpha))
@@ -152,7 +153,12 @@ fun BackgroundPicker(background: WidgetBackground, enabled: Boolean, onChange: (
         )
         Slider(
             value = background.alpha / 255f,
-            onValueChange = { onChange(background.copy(alpha = (it * 255).roundToInt())) },
+            onValueChange = {
+                val alpha = (it * 255).roundToInt()
+                // A tick every 10% (the shown number), not on every tiny move.
+                haptics.step(percentStep(background.alpha), percentStep(alpha), small = true)
+                onChange(background.copy(alpha = alpha))
+            },
             enabled = enabled
         )
     }
@@ -166,6 +172,7 @@ private fun SwatchCircle(
     onClick: () -> Unit,
     fill: @Composable () -> Unit
 ) {
+    val haptics = rememberHaptics()
     // Selected: a thick ring in the theme color with a small gap; otherwise a thin outline.
     val ring = if (selected) {
         Modifier
@@ -180,7 +187,10 @@ private fun SwatchCircle(
         Modifier
             .size(44.dp)
             .clip(CircleShape)
-            .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
+            .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = {
+                if (!selected) haptics.pick()
+                onClick()
+            })
             .semantics { contentDescription = name }
             .then(ring)
             .clip(CircleShape)
@@ -204,3 +214,6 @@ internal fun Checkerboard() {
         }
     }
 }
+
+/** Which 10% step an opacity (0..255) is on, for the slider's ticks. */
+private fun percentStep(alpha: Int) = (alpha / 255f * 100).roundToInt() / 10

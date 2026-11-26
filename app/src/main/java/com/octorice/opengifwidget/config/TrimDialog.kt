@@ -1,5 +1,6 @@
 package com.octorice.opengifwidget.config
 
+import com.octorice.opengifwidget.ui.rememberHaptics
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -63,6 +64,7 @@ fun TrimDialog(
     onCancel: () -> Unit,
     onConfirm: (startMs: Long, lengthMs: Long) -> Unit
 ) {
+    val haptics = rememberHaptics()
     val duration = info.durationMs
     val minLength = min(MIN_CLIP_MS, duration)
     var startMs by remember { mutableFloatStateOf(0f) }
@@ -130,6 +132,7 @@ fun TrimDialog(
                     value = startMs,
                     onValueChange = {
                         scrubbing = Scrubbing.START
+                        haptics.step((startMs / 100).toInt(), (it / 100).toInt(), small = true) // every 0.1 s
                         startMs = it
                         // Keep the clip inside the video.
                         lengthMs = lengthMs.coerceAtMost((duration - it).coerceAtLeast(minLength.toFloat()))
@@ -145,6 +148,8 @@ fun TrimDialog(
                     value = lengthMs.coerceIn(minLength.toFloat(), maxLength),
                     onValueChange = {
                         scrubbing = Scrubbing.END
+                        // A tick for every frame added or taken away (the number shown above).
+                        haptics.step(frames, VideoSource.frameCount(it.toLong(), fpsCap), small = true)
                         lengthMs = it
                     },
                     onValueChangeFinished = { scrubbing = null },
@@ -155,6 +160,7 @@ fun TrimDialog(
                 Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                     TextButton(onClick = onCancel) { Text(stringResource(R.string.trim_cancel)) }
                     Button(onClick = {
+                        haptics.confirm()
                         onConfirm(startMs.toLong(), lengthMs.toLong().coerceIn(minLength, min(maxClipMs, duration)))
                     }) { Text(stringResource(R.string.trim_use)) }
                 }

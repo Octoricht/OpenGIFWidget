@@ -117,13 +117,13 @@ import com.octorice.opengifwidget.data.WidgetTap
 import com.octorice.opengifwidget.data.WidgetTaps
 import com.octorice.opengifwidget.ui.ShapePicker
 import com.octorice.opengifwidget.ui.SliderLabel
+import com.octorice.opengifwidget.ui.Haptics
+import com.octorice.opengifwidget.ui.rememberHaptics
 import com.octorice.opengifwidget.ui.AddShapeDialogs
 import com.octorice.opengifwidget.ui.rememberShapeLibrary
 import com.octorice.opengifwidget.gif.Zoom
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.max
 import kotlin.math.exp
 import kotlin.math.ln
@@ -235,7 +235,11 @@ class GifConfigActivity : ComponentActivity() {
                 zoom = WidgetStore.getZoom(this, appWidgetId),
                 spin = WidgetStore.getSpin(this, appWidgetId),
                 style = WidgetStore.getShapeStyle(this, appWidgetId),
-                background = WidgetStore.getBackground(this, appWidgetId),
+                background = WidgetStore.getBackground(
+                    this,
+                    appWidgetId,
+                    if (GifWidgetProvider.isSlideshow(this, appWidgetId)) WidgetBackground.SLIDESHOW_DEFAULT else WidgetBackground.DEFAULT
+                ),
                 speed = WidgetStore.getSpeed(this, appWidgetId),
                 // What a tap really does now (an uninstalled app shows as Edit, which Save then keeps).
                 tap = WidgetTaps.usable(this, appWidgetId, GifWidgetProvider.isSlideshow(this, appWidgetId))
@@ -731,10 +735,14 @@ private fun EditorScreen(
     var nameEdited by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf<Busy?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val haptics = rememberHaptics()
     val scrollState = rememberScrollState()
-    // Errors are shown at the bottom of the page: scroll there so they're never missed.
+    // Errors are shown at the bottom of the page: a short buzz, and scroll there so they're never missed.
     LaunchedEffect(error) {
-        if (error != null) scrollState.animateScrollTo(scrollState.maxValue)
+        if (error != null) {
+            haptics.reject()
+            scrollState.animateScrollTo(scrollState.maxValue)
+        }
     }
     var trimming by remember { mutableStateOf<OpenedVideo?>(null) } // video waiting for its clip
     var videoJob by remember { mutableStateOf<Job?>(null) } // running frame extraction (cancellable)
@@ -996,6 +1004,7 @@ private fun EditorScreen(
     fun onSaveSlideshow() {
         if (slides.size < MIN_SLIDES) return
         if (!hasChanges()) {
+            haptics.confirm()
             onSaved()
             return
         }
@@ -1010,6 +1019,7 @@ private fun EditorScreen(
                 saveSlideshow(slides, settings, currentPlayback(), remakeFrames()) { done, total ->
                     busy = Busy.Saving(done, total)
                 }
+                haptics.confirm()
                 onSaved()
             } catch (e: IOException) {
                 error = e.friendlyMessage(context)
@@ -1025,6 +1035,7 @@ private fun EditorScreen(
         }
         val gif = picked ?: saved.gif ?: return
         if (!hasChanges()) {
+            haptics.confirm()
             onSaved()
             return
         }
@@ -1038,6 +1049,7 @@ private fun EditorScreen(
                 save(gif, settings, remakeFrames(), widgetAspectRatio) { done, total ->
                     busy = Busy.Saving(done, total)
                 }
+                haptics.confirm()
                 onSaved()
             } catch (e: IOException) {
                 error = e.friendlyMessage(context)
@@ -1302,6 +1314,7 @@ private fun EditorScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                             FilledTonalButton(
                                 onClick = {
+                                    haptics.press()
                                     photoPicker.launch(
                                         PickVisualMediaRequest(
                                             ActivityResultContracts.PickVisualMedia.ImageAndVideo // pictures, GIFs, videos
@@ -1317,7 +1330,10 @@ private fun EditorScreen(
                                 Text(stringResource(R.string.editor_gallery))
                             }
                             OutlinedButton(
-                                onClick = { filePicker.launch(arrayOf("image/*", "video/*")) },
+                                onClick = {
+                                    haptics.press()
+                                    filePicker.launch(arrayOf("image/*", "video/*"))
+                                },
                                 enabled = busy == null,
                                 contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
                                 modifier = Modifier.weight(1f)
@@ -1337,6 +1353,7 @@ private fun EditorScreen(
                                 // Presets: they snap the zoom. Neither is lit when the zoom is anywhere else.
                                 selected = preset == mode,
                                 onClick = {
+                                    if (preset != mode) haptics.pick()
                                     if (repositioning) {
                                         // Keep repositioning, just jump to the preset's zoom (Fit is centered).
                                         customZoom = if (mode == ScaleMode.FIT) fitZoom else 1f
@@ -1437,7 +1454,7 @@ private fun EditorScreen(
                                 )
                             }
                             Spacer(Modifier.width(12.dp))
-                            Switch(checked = roundCorners, onCheckedChange = { roundCorners = it }, enabled = busy == null)
+                            Switch(checked = roundCorners, onCheckedChange = { haptics.toggle(it); roundCorners = it }, enabled = busy == null)
                         }
                     }
 
@@ -1564,6 +1581,7 @@ private fun Preview(
     // Slideshow: each picture's zoom and center (null = use [zoom] / [cropCenter]); null = not a slideshow.
     slideCrop: ((ImageBitmap) -> Pair<Float, Offset>?)? = null
 ) {
+    val haptics = rememberHaptics()
     val cornerRadius by animateDpAsState(if (squareCorners) 0.dp else 24.dp, label = "corners")
 
     BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -1690,7 +1708,7 @@ private fun Preview(
                     OutlinedButton(onClick = { onEndReposition(false) }) {
                         Text(stringResource(R.string.editor_reposition_cancel))
                     }
-                    Button(onClick = { onEndReposition(true) }) {
+                    Button(onClick = { haptics.confirm(); onEndReposition(true) }) {
                         Text(stringResource(R.string.editor_reposition_done))
                     }
                 }
@@ -1710,10 +1728,10 @@ private fun zoomWindow(viewWidth: Float, viewHeight: Float, aspect: Float, margi
 }
 
 /** Clamps a zoom, snaps it onto Fit / Fill, and gives a small tick when it lands on one. */
-private class ZoomSnapper(val haptics: androidx.compose.ui.hapticfeedback.HapticFeedback) {
+private class ZoomSnapper(val haptics: Haptics) {
     fun apply(raw: Float, old: Float, fit: Float, min: Float, max: Float): Float {
         val snapped = Zoom.snap(raw.coerceIn(min, max), fit).coerceIn(min, max)
-        if (snapped != old && (snapped == 1f || snapped == fit)) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        if (snapped != old && (snapped == 1f || snapped == fit)) haptics.tick()
         return snapped
     }
 }
@@ -1744,7 +1762,7 @@ private fun ZoomView(
     onZoomChange: (Float, Offset) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val snapper = ZoomSnapper(LocalHapticFeedback.current)
+    val snapper = ZoomSnapper(rememberHaptics())
     // The gesture below keeps running while the GIF plays (it only restarts if the picture's size or
     // the zoom range changes), so it reads the newest values through these.
     val latestCenter by rememberUpdatedState(cropCenter)
@@ -1858,7 +1876,7 @@ private fun ZoomSlider(
     aspectRatio: Float,
     onZoomChange: (Float, Offset) -> Unit
 ) {
-    val snapper = ZoomSnapper(LocalHapticFeedback.current)
+    val snapper = ZoomSnapper(rememberHaptics())
     val range = ln(maxZoom / minZoom).coerceAtLeast(0.0001f)
     val current = zoom()
     Row(
@@ -1902,17 +1920,23 @@ private fun SpeedPicker(speed: Float, frames: FrameSet, fpsCap: Int, enabled: Bo
     val speedText = remember(speed) {
         NumberFormat.getNumberInstance().apply { maximumFractionDigits = 2 }.format(speed)
     }
+    val haptics = rememberHaptics()
     Column(Modifier.fillMaxWidth()) {
         SliderLabel(stringResource(R.string.editor_speed), stringResource(R.string.editor_speed_value, speedText)) {
             AnimatedVisibility(visible = speed != 1f) {
-                TextButton(onClick = { onChange(1f) }, enabled = enabled) {
+                TextButton(onClick = { haptics.press(); onChange(1f) }, enabled = enabled) {
                     Text(stringResource(R.string.editor_speed_reset))
                 }
             }
         }
         Slider(
             value = speed,
-            onValueChange = { onChange(((it * 20).roundToInt() / 20f).coerceIn(WidgetStore.MIN_SPEED, WidgetStore.MAX_SPEED)) },
+            onValueChange = {
+                val new = ((it * 20).roundToInt() / 20f).coerceIn(WidgetStore.MIN_SPEED, WidgetStore.MAX_SPEED)
+                // A faint tick for every 0.05x, a clearer one on 1x (the normal speed).
+                if (new != speed) if (new == 1f) haptics.tick() else haptics.smallTick()
+                onChange(new)
+            },
             valueRange = WidgetStore.MIN_SPEED..WidgetStore.MAX_SPEED,
             enabled = enabled
         )
@@ -2012,6 +2036,7 @@ private fun Modifier.spinning(turnMs: Int?): Modifier {
 @Composable
 private fun SpinControls(spin: Float?, enabled: Boolean, onChange: (Float?) -> Unit) {
     val choices = com.octorice.opengifwidget.gif.Spin.SECONDS_PER_TURN
+    val haptics = rememberHaptics()
     Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             RowIcon(R.drawable.ic_spin)
@@ -2019,7 +2044,7 @@ private fun SpinControls(spin: Float?, enabled: Boolean, onChange: (Float?) -> U
             Text(stringResource(R.string.editor_spin), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             Switch(
                 checked = spin != null,
-                onCheckedChange = { on -> onChange(if (on) com.octorice.opengifwidget.gif.Spin.DEFAULT_SECONDS_PER_TURN else null) },
+                onCheckedChange = { on -> haptics.toggle(on); onChange(if (on) com.octorice.opengifwidget.gif.Spin.DEFAULT_SECONDS_PER_TURN else null) },
                 enabled = enabled
             )
         }
@@ -2034,7 +2059,11 @@ private fun SpinControls(spin: Float?, enabled: Boolean, onChange: (Float?) -> U
                 )
                 Slider(
                     value = index.toFloat(),
-                    onValueChange = { onChange(choices[it.roundToInt().coerceIn(0, choices.lastIndex)]) },
+                    onValueChange = {
+                        val new = choices[it.roundToInt().coerceIn(0, choices.lastIndex)]
+                        haptics.step(current, new)
+                        onChange(new)
+                    },
                     valueRange = 0f..choices.lastIndex.toFloat(),
                     steps = (choices.size - 2).coerceAtLeast(0),
                     enabled = enabled
@@ -2062,11 +2091,12 @@ private fun ShapeTools(
     onSize: (PixelSize) -> Unit,
     onReverse: (Boolean) -> Unit
 ) {
+    val haptics = rememberHaptics()
     Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
                 selected = pixelOn,
-                onClick = { onPixelOn(!pixelOn) },
+                onClick = { haptics.toggle(!pixelOn); onPixelOn(!pixelOn) },
                 label = { Text(stringResource(R.string.editor_pixelify)) },
                 // A tiny picture of the effect (the label already says it, so no description).
                 leadingIcon = {
@@ -2076,7 +2106,7 @@ private fun ShapeTools(
             )
             FilterChip(
                 selected = halftoneOn,
-                onClick = { onHalftoneOn(!halftoneOn) },
+                onClick = { haptics.toggle(!halftoneOn); onHalftoneOn(!halftoneOn) },
                 label = { Text(stringResource(R.string.editor_halftone)) },
                 // A tiny picture of the effect (the label already says it, so no description).
                 leadingIcon = {
@@ -2086,7 +2116,7 @@ private fun ShapeTools(
             )
             FilterChip(
                 selected = reverse,
-                onClick = { onReverse(!reverse) },
+                onClick = { haptics.toggle(!reverse); onReverse(!reverse) },
                 label = { Text(stringResource(R.string.editor_reverse)) },
                 // A tiny picture of the effect (the label already says it, so no description).
                 leadingIcon = {
@@ -2100,7 +2130,7 @@ private fun ShapeTools(
                 PixelSize.entries.forEachIndexed { index, option ->
                     SegmentedButton(
                         selected = size == option,
-                        onClick = { onSize(option) },
+                        onClick = { if (size != option) haptics.pick(); onSize(option) },
                         enabled = enabled,
                         shape = SegmentedButtonDefaults.itemShape(index, PixelSize.entries.size),
                         // A corner drawn with small / medium / big steps replaces the checkmark.

@@ -250,6 +250,7 @@ internal fun ShapeTile(
     onClick: () -> Unit,
     icon: @Composable (Color) -> Unit
 ) {
+    val haptics = rememberHaptics()
     val colors = MaterialTheme.colorScheme
     val tileShape = RoundedCornerShape(14.dp)
     Column(
@@ -257,7 +258,10 @@ internal fun ShapeTile(
         modifier = Modifier
             .width(64.dp)
             .clip(RoundedCornerShape(16.dp))
-            .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
+            .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = {
+                if (!selected) haptics.pick()
+                onClick()
+            })
             .padding(vertical = 4.dp)
     ) {
         Box(

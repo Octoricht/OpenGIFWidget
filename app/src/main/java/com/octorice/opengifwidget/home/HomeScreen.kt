@@ -1,5 +1,6 @@
 package com.octorice.opengifwidget.home
 
+import com.octorice.opengifwidget.ui.rememberHaptics
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -68,8 +69,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -123,6 +122,7 @@ fun HomeScreen(
     onOpenWidget: (appWidgetId: Int) -> Unit,
     onOpenSettings: () -> Unit
 ) {
+    val haptics = rememberHaptics()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -267,6 +267,7 @@ fun HomeScreen(
             text = { Text(stringResource(R.string.remove_message)) },
             confirmButton = {
                 TextButton(onClick = {
+                    haptics.confirm()
                     toRemove = null
                     scope.launch {
                         withContext(Dispatchers.IO) { HomeData.removeFromList(context, widget.appWidgetId) }
@@ -379,7 +380,7 @@ private fun WidgetCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val haptics = LocalHapticFeedback.current
+    val haptics = rememberHaptics()
     val frames = widget.gif?.frames
     val shape = RoundedCornerShape(24.dp)
     ElevatedCard(
@@ -390,7 +391,7 @@ private fun WidgetCard(
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    haptics.longPress()
                     onLongClick()
                 }
             )
@@ -693,6 +694,7 @@ private fun shortTime(seconds: Int): String = when {
 
 @Composable
 private fun EmptyState(onAddWidget: (slideshow: Boolean) -> Unit) {
+    val haptics = rememberHaptics()
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -724,12 +726,12 @@ private fun EmptyState(onAddWidget: (slideshow: Boolean) -> Unit) {
         )
         Spacer(Modifier.height(24.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            FilledTonalButton(onClick = { onAddWidget(false) }) {
+            FilledTonalButton(onClick = { haptics.press(); onAddWidget(false) }) {
                 Icon(painterResource(R.drawable.ic_widget_normal), contentDescription = null, Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.home_add_normal))
             }
-            FilledTonalButton(onClick = { onAddWidget(true) }) {
+            FilledTonalButton(onClick = { haptics.press(); onAddWidget(true) }) {
                 Icon(painterResource(R.drawable.ic_widget_slideshow), contentDescription = null, Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.home_add_slideshow))
@@ -744,6 +746,7 @@ private fun EmptyState(onAddWidget: (slideshow: Boolean) -> Unit) {
  */
 @Composable
 private fun AddWidgetButton(open: Boolean, onOpen: () -> Unit, onPick: (slideshow: Boolean) -> Unit) {
+    val haptics = rememberHaptics()
     AnimatedContent(
         targetState = open,
         // The one button fades out while the two grow out of the same spot (and back when closing).
@@ -757,19 +760,19 @@ private fun AddWidgetButton(open: Boolean, onOpen: () -> Unit, onPick: (slidesho
     ) { isOpen ->
         if (!isOpen) {
             ExtendedFloatingActionButton(
-                onClick = onOpen,
+                onClick = { haptics.press(); onOpen() },
                 icon = { Icon(painterResource(R.drawable.ic_add), contentDescription = null) },
                 text = { Text(stringResource(R.string.home_add_widget)) }
             )
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ExtendedFloatingActionButton(
-                    onClick = { onPick(false) },
+                    onClick = { haptics.press(); onPick(false) },
                     icon = { Icon(painterResource(R.drawable.ic_widget_normal), contentDescription = null) },
                     text = { Text(stringResource(R.string.home_add_normal), maxLines = 1) }
                 )
                 ExtendedFloatingActionButton(
-                    onClick = { onPick(true) },
+                    onClick = { haptics.press(); onPick(true) },
                     icon = { Icon(painterResource(R.drawable.ic_widget_slideshow), contentDescription = null) },
                     text = { Text(stringResource(R.string.home_add_slideshow), maxLines = 1) }
                 )

@@ -157,6 +157,7 @@ fun AddShapeDialogs(
     tutorialDoneText: String,
     tutorial: Boolean = false
 ) {
+    val haptics = rememberHaptics()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var step by remember { mutableStateOf<AddStep>(AddStep.Choose) }
@@ -274,6 +275,7 @@ fun AddShapeDialogs(
             },
             confirmButton = {
                 TextButton(onClick = {
+                    haptics.confirm()
                     scope.launch {
                         try {
                             val shape = withContext(Dispatchers.IO) { CustomShapes.save(context, current.mask) }
