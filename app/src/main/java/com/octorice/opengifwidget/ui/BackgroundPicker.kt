@@ -147,7 +147,8 @@ fun BackgroundPicker(background: WidgetBackground, enabled: Boolean, onChange: (
         Spacer(Modifier.height(8.dp))
         SliderLabel(
             stringResource(R.string.editor_opacity),
-            stringResource(R.string.editor_opacity_value, (background.alpha / 255f * 100).roundToInt())
+            stringResource(R.string.editor_opacity_value, (background.alpha / 255f * 100).roundToInt()),
+            icon = R.drawable.ic_opacity
         )
         Slider(
             value = background.alpha / 255f,

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Small pixel size: a rounded corner drawn with 8 steps across (bigger steps = chonkier). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M14.500,2.000H22V4.500H14.500zM9.500,4.500H22V7.000H9.500zM7.000,7.000H22V9.500H7.000zM4.500,9.500H22V12.000H4.500zM4.500,12.000H22V14.500H4.500zM2.000,14.500H22V17.000H2.000zM2.000,17.000H22V19.500H2.000zM2.000,19.500H22V22.000H2.000z" />
+</vector>

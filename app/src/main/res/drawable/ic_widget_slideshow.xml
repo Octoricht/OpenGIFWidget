@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Slideshow widget: three stacked pictures. The back two only draw the edges that show. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M10,5.5V3.5a1.5,1.5 0,0 1,1.5,-1.5H20.5a1.5,1.5 0,0 1,1.5,1.5V10.5a1.5,1.5 0,0 1,-1.5,1.5H19.5M6,9.5V7.5a1.5,1.5 0,0 1,1.5,-1.5H16.5a1.5,1.5 0,0 1,1.5,1.5V14.5a1.5,1.5 0,0 1,-1.5,1.5H15.5" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M19,4.3a1,1 0,1 0,2,0a1,1 0,1 0,-2,0zM19.2,10.8L20.6,8.6L21.9,10.8zM15,8.3a1,1 0,1 0,2,0a1,1 0,1 0,-2,0zM15.2,14.8L16.6,12.6L17.9,14.8z" />
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="M3.5,11H12.5a1.5,1.5 0,0 1,1.5,1.5V20.5a1.5,1.5 0,0 1,-1.5,1.5H3.5a1.5,1.5 0,0 1,-1.5,-1.5V12.5a1.5,1.5 0,0 1,1.5,-1.5zM4,14a1.2,1.2 0,1 0,2.4,0a1.2,1.2 0,1 0,-2.4,0zM3.3,20.6L7,16L9.2,18.2L10.5,17L12.7,20.6z" />
+</vector>

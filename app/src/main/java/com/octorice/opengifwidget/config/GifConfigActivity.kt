@@ -1258,7 +1258,7 @@ private fun EditorScreen(
                     }
 
                     Spacer(Modifier.height(24.dp))
-                    SectionTitle(stringResource(R.string.editor_display))
+                    SectionTitle(stringResource(R.string.editor_display), R.drawable.ic_display)
                     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                         ScaleMode.entries.forEachIndexed { index, mode ->
                             SegmentedButton(
@@ -1278,7 +1278,15 @@ private fun EditorScreen(
                                     }
                                 },
                                 enabled = busy == null,
-                                shape = SegmentedButtonDefaults.itemShape(index, ScaleMode.entries.size)
+                                shape = SegmentedButtonDefaults.itemShape(index, ScaleMode.entries.size),
+                                // A picture of Fit / Fill replaces the checkmark (the color shows the pick).
+                                icon = {
+                                    Icon(
+                                        painterResource(if (mode == ScaleMode.FIT) R.drawable.ic_fit else R.drawable.ic_fill),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(SegmentedButtonDefaults.IconSize)
+                                    )
+                                }
                             ) {
                                 Text(stringResource(if (mode == ScaleMode.FIT) R.string.mode_fit else R.string.mode_fill))
                             }
@@ -1308,7 +1316,7 @@ private fun EditorScreen(
                     }
 
                     Spacer(Modifier.height(24.dp))
-                    SectionTitle(stringResource(R.string.editor_shape))
+                    SectionTitle(stringResource(R.string.editor_shape), R.drawable.ic_shape)
                     ShapePicker(
                         shape,
                         customShapes = library.shapes,
@@ -1379,12 +1387,12 @@ private fun EditorScreen(
                     if (!slideshow && master != null && master.frameCount > 1) {
                         Spacer(Modifier.height(24.dp))
                         // "Playback", like the slideshow's section (Speed is the slider's own label).
-                        SectionTitle(stringResource(R.string.slideshow_playback))
+                        SectionTitle(stringResource(R.string.slideshow_playback), R.drawable.ic_playback)
                         SpeedPicker(speed, master, fpsCap, enabled = busy == null, onChange = { speed = it })
                     }
 
                     Spacer(Modifier.height(24.dp))
-                    SectionTitle(stringResource(R.string.editor_background))
+                    SectionTitle(stringResource(R.string.editor_background), R.drawable.ic_background)
                     BackgroundPicker(background, enabled = busy == null, onChange = { background = it })
 
                     error?.let {
@@ -1398,16 +1406,27 @@ private fun EditorScreen(
     }
 }
 
+/** A section's bold title, with an optional small [icon] (theme color) before it. */
 @Composable
-internal fun SectionTitle(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.SemiBold,
+internal fun SectionTitle(text: String, icon: Int? = null) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 8.dp)
-    )
+    ) {
+        if (icon != null) {
+            RowIcon(icon, Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(text, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** The small theme-colored icon at the start of a title or row (decorative: the text says it). */
+@Composable
+internal fun RowIcon(icon: Int, modifier: Modifier = Modifier.size(24.dp)) {
+    Icon(painterResource(icon), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = modifier)
 }
 
 /**
@@ -1870,6 +1889,8 @@ private fun SpinControls(spin: Float?, enabled: Boolean, onChange: (Float?) -> U
     val choices = com.octorice.opengifwidget.gif.Spin.SECONDS_PER_TURN
     Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            RowIcon(R.drawable.ic_spin)
+            Spacer(Modifier.width(12.dp))
             Text(stringResource(R.string.editor_spin), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             Switch(
                 checked = spin != null,
@@ -1956,7 +1977,21 @@ private fun ShapeTools(
                         selected = size == option,
                         onClick = { onSize(option) },
                         enabled = enabled,
-                        shape = SegmentedButtonDefaults.itemShape(index, PixelSize.entries.size)
+                        shape = SegmentedButtonDefaults.itemShape(index, PixelSize.entries.size),
+                        // A corner drawn with small / medium / big steps replaces the checkmark.
+                        icon = {
+                            Icon(
+                                painterResource(
+                                    when (option) {
+                                        PixelSize.SMALL -> R.drawable.ic_size_small
+                                        PixelSize.MEDIUM -> R.drawable.ic_size_medium
+                                        PixelSize.CHONKY -> R.drawable.ic_size_chonky
+                                    }
+                                ),
+                                contentDescription = null,
+                                modifier = Modifier.size(SegmentedButtonDefaults.IconSize)
+                            )
+                        }
                     ) { Text(stringResource(option.nameRes)) }
                 }
             }

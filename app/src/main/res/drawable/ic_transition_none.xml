@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Transition None: old picture (outline) next to the new one (filled), no blending. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.8"
+        android:pathData="M3.5,5h6a1.5,1.5 0,0 1,1.5,1.5v11a1.5,1.5 0,0 1,-1.5,1.5h-6a1.5,1.5 0,0 1,-1.5,-1.5v-11a1.5,1.5 0,0 1,1.5,-1.5z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M14.5,5h6a1.5,1.5 0,0 1,1.5,1.5v11a1.5,1.5 0,0 1,-1.5,1.5h-6a1.5,1.5 0,0 1,-1.5,-1.5v-11a1.5,1.5 0,0 1,1.5,-1.5z" />
+</vector>

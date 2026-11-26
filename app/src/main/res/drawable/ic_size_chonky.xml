@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Chonky pixel size: a rounded corner drawn with 3 steps across (bigger steps = chonkier). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M8.667,2.000H22V8.667H8.667zM2.000,8.667H22V15.333H2.000zM2.000,15.333H22V22.000H2.000z" />
+</vector>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shuffle: two crossing arrows. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:pathData="M2,7h4c5,0 6,10 11,10h2M2,17h4c5,0 6,-10 11,-10h2" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M18,3.5L22.5,7L18,10.5zM18,13.5L22.5,17L18,20.5z" />
+</vector>

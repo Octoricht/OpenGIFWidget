@@ -13,6 +13,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -124,7 +125,7 @@ private fun SettingsScreen(onBack: () -> Unit) {
                 .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            SectionTitle(stringResource(R.string.settings_animation))
+            SectionTitle(stringResource(R.string.settings_animation), R.drawable.ic_fps)
             SettingsCard {
                 Text(stringResource(R.string.settings_fps_cap), style = MaterialTheme.typography.titleMedium)
                 Text(
@@ -161,10 +162,10 @@ private fun SettingsScreen(onBack: () -> Unit) {
                 }
             }
 
-            SectionTitle(stringResource(R.string.shapes_library_title))
+            SectionTitle(stringResource(R.string.shapes_library_title), R.drawable.ic_shape)
             SettingsCard { YourShapes() }
 
-            SectionTitle(stringResource(R.string.settings_reliability))
+            SectionTitle(stringResource(R.string.settings_reliability), R.drawable.ic_reliability)
             SettingsCard {
                 Text(stringResource(R.string.settings_battery_title), style = MaterialTheme.typography.titleMedium)
                 Text(
@@ -177,7 +178,7 @@ private fun SettingsScreen(onBack: () -> Unit) {
                 }
             }
 
-            SectionTitle(stringResource(R.string.settings_about))
+            SectionTitle(stringResource(R.string.settings_about), R.drawable.ic_info)
             SettingsCard(horizontalAlignment = Alignment.CenterHorizontally) {
                 AppIcon()
                 Text(
@@ -370,15 +371,24 @@ private fun openBatterySettings(context: Context) {
     }
 }
 
+/** A Settings section title in the theme color, with its small icon before it. */
 @Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 8.dp)
-    )
+private fun SectionTitle(text: String, icon: Int) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+        Icon(
+            painterResource(icon),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
 }
 
 @Composable

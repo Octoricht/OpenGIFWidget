@@ -533,12 +533,12 @@ private fun EmptyState(onAddWidget: (slideshow: Boolean) -> Unit) {
         Spacer(Modifier.height(24.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             FilledTonalButton(onClick = { onAddWidget(false) }) {
-                Icon(painterResource(R.drawable.ic_image), contentDescription = null, Modifier.size(18.dp))
+                Icon(painterResource(R.drawable.ic_widget_normal), contentDescription = null, Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.home_add_normal))
             }
             FilledTonalButton(onClick = { onAddWidget(true) }) {
-                Icon(painterResource(R.drawable.ic_photo_library), contentDescription = null, Modifier.size(18.dp))
+                Icon(painterResource(R.drawable.ic_widget_slideshow), contentDescription = null, Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.home_add_slideshow))
             }
@@ -573,12 +573,12 @@ private fun AddWidgetButton(open: Boolean, onOpen: () -> Unit, onPick: (slidesho
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ExtendedFloatingActionButton(
                     onClick = { onPick(false) },
-                    icon = { Icon(painterResource(R.drawable.ic_image), contentDescription = null) },
+                    icon = { Icon(painterResource(R.drawable.ic_widget_normal), contentDescription = null) },
                     text = { Text(stringResource(R.string.home_add_normal), maxLines = 1) }
                 )
                 ExtendedFloatingActionButton(
                     onClick = { onPick(true) },
-                    icon = { Icon(painterResource(R.drawable.ic_photo_library), contentDescription = null) },
+                    icon = { Icon(painterResource(R.drawable.ic_widget_slideshow), contentDescription = null) },
                     text = { Text(stringResource(R.string.home_add_slideshow), maxLines = 1) }
                 )
             }

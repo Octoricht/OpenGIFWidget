@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Opacity: a circle, solid on the left, checkerboard (transparent) on the right. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <group>
+        <clip-path android:pathData="M3,12a9,9 0,1 0,18,0a9,9 0,1 0,-18,0z" />
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M3,3h9v18h-9zM12,3h3v3h-3zM18,3h3v3h-3zM15,6h3v3h-3zM12,9h3v3h-3zM18,9h3v3h-3zM15,12h3v3h-3zM12,15h3v3h-3zM18,15h3v3h-3zM15,18h3v3h-3z" />
+    </group>
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.5"
+        android:pathData="M2.5,12a9.5,9.5 0,1 0,19,0a9.5,9.5 0,1 0,-19,0z" />
+</vector>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fit: a tall picture inside the widget frame, with empty space on both sides. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.8"
+        android:pathData="M4.5,5.5h15a2,2 0,0 1,2,2v9a2,2 0,0 1,-2,2h-15a2,2 0,0 1,-2,-2v-9a2,2 0,0 1,2,-2z" />
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="M9,7.5H15a0.8,0.8 0,0 1,0.8,0.8V15.7a0.8,0.8 0,0 1,-0.8,0.8H9a0.8,0.8 0,0 1,-0.8,-0.8V8.3a0.8,0.8 0,0 1,0.8,-0.8zM10.5,10a1,1 0,1 0,2,0a1,1 0,1 0,-2,0zM9.3,15.3L11.5,12.3L12.8,13.6L13.6,12.8L14.7,15.3z" />
+</vector>

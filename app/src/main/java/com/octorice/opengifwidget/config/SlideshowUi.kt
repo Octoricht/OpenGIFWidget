@@ -208,7 +208,7 @@ internal fun SlideshowPlayback(
     if (slideCount < 2) return
     Column {
         Spacer(Modifier.height(24.dp))
-        SectionTitle(stringResource(R.string.slideshow_playback))
+        SectionTitle(stringResource(R.string.slideshow_playback), R.drawable.ic_playback)
         TimePerPicture(seconds, enabled, onSeconds)
         // Slow mode: the picture changes while you're not looking, so there's no transition.
         if (SlideTiming.isSlow(seconds)) {
@@ -228,6 +228,8 @@ internal fun SlideshowPlayback(
                 .fillMaxWidth()
                 .padding(top = 16.dp)
         ) {
+            RowIcon(R.drawable.ic_shuffle)
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(stringResource(R.string.slideshow_shuffle), style = MaterialTheme.typography.bodyLarge)
                 Text(
@@ -250,7 +252,7 @@ internal fun SlideshowPlayback(
 private fun TimePerPicture(seconds: Int, enabled: Boolean, onChange: (Int) -> Unit) {
     val choices = SlideTiming.CHOICES
     val index = choices.indexOf(SlideTiming.nearest(seconds))
-    SliderLabel(stringResource(R.string.slideshow_time), timeLabel(seconds))
+    SliderLabel(stringResource(R.string.slideshow_time), timeLabel(seconds), icon = R.drawable.ic_duration)
     Slider(
         value = index.toFloat(),
         onValueChange = { onChange(choices[it.roundToInt().coerceIn(0, choices.lastIndex)]) },
@@ -279,7 +281,21 @@ private fun TransitionPicker(transition: Transition, enabled: Boolean, onTransit
                     selected = transition == option,
                     onClick = { onTransition(option) },
                     enabled = enabled,
-                    shape = SegmentedButtonDefaults.itemShape(index, Transition.entries.size)
+                    shape = SegmentedButtonDefaults.itemShape(index, Transition.entries.size),
+                    // Our picture of the transition replaces the usual checkmark (the color shows the pick).
+                    icon = {
+                        Icon(
+                            painterResource(
+                                when (option) {
+                                    Transition.NONE -> R.drawable.ic_transition_none
+                                    Transition.FADE -> R.drawable.ic_transition_fade
+                                    Transition.SLIDE -> R.drawable.ic_transition_slide
+                                }
+                            ),
+                            contentDescription = null,
+                            modifier = Modifier.size(SegmentedButtonDefaults.IconSize)
+                        )
+                    }
                 ) {
                     Text(
                         stringResource(

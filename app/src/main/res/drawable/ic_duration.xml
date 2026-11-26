@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Time per picture: an hourglass with sand at the bottom. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M5,2.5H19M5,21.5H19" />
+    <path
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.8"
+        android:pathData="M7,2.5C7,8 12,9 12,12C12,15 7,16 7,21.5M17,2.5C17,8 12,9 12,12C12,15 17,16 17,21.5" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M8.5,20.5C9,17.5 12,16.5 12,15.5C12,16.5 15,17.5 15.5,20.5z" />
+</vector>
