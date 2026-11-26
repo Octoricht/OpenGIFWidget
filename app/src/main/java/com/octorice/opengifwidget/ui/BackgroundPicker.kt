@@ -88,7 +88,16 @@ fun BackgroundPicker(background: WidgetBackground, enabled: Boolean, onChange: (
     }
 
     Column(Modifier.fillMaxWidth()) {
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Same order as the circles below: Transparent, Custom color, then the presets.
+        val selectedIndex = when {
+            background.alpha == 0 -> 0
+            custom -> 1
+            else -> 2 + Swatches.indexOfFirst { it.color == background.color }
+        }
+        LazyRow(
+            state = rememberRowShowing(selectedIndex),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             item {
                 SwatchCircle(
                     name = stringResource(R.string.color_transparent),

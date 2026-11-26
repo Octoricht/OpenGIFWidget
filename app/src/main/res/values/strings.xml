@@ -176,10 +176,10 @@
     <string name="error_generic">Something went wrong. Please try again.</string>
 
     <!-- Home screen: removing a widget -->
-    <string name="home_hint">Tap a widget to edit it. Long-press to remove it.</string>
+    <string name="home_hint">Tap a widget to edit it. If one is listed here but isn\'t on your home screen, long-press it to remove it from this list.</string>
     <string name="home_updates_footer">OpenGIFWidget %1$s · Get updates</string>
-    <string name="remove_title">Remove this widget?</string>
-    <string name="remove_message">Apps can\'t take widgets off your home screen, only your launcher can. If this widget is on your home screen, long-press it there and choose Remove.\n\nIf it isn\'t (a leftover from a setup you cancelled), you can remove it from this list. Restarting your device also clears leftovers.</string>
+    <string name="remove_title">Remove from this list?</string>
+    <string name="remove_message">Only do this if this widget isn\'t on your home screen anymore (a leftover from a setup you cancelled). Restarting your device also clears leftovers.\n\nIf it is on your home screen, remove it there instead: long-press it and choose Remove. Apps can\'t take widgets off your home screen.</string>
     <string name="remove_confirm">Remove from list</string>
     <string name="remove_cancel">Cancel</string>
     <string name="remove_done">Removed from the list</string>
@@ -292,7 +292,7 @@
     <string name="tutorial_making_hint">The app is looking at the picture: the black cat stays, the white around it gets cut away.</string>
     <string name="tutorial_preview_hint">Here\'s your cutter! The black cat became the shape, and the white around it was cut away (the checkered part). Tap Use this shape to keep it.</string>
     <string name="tutorial_done_title">Your cat shape is ready!</string>
-    <string name="tutorial_done_editor">It\'s on your widget\'s preview now. Tap Save to put it on your home screen. You\'ll always find it in the Shape row.</string>
+    <string name="tutorial_done_editor">It\'s on your widget\'s preview now. Tap %1$s to keep it. You\'ll always find it in the Shape row.</string>
     <string name="tutorial_done_settings">You\'ll find it in every widget\'s Shape row. Now try it with your own pictures!</string>
     <string name="shapes_add_from">Pick a picture for your shape.</string>
     <string name="shapes_making">Making your shape…</string>

@@ -14,8 +14,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -129,7 +135,17 @@ fun ShapePicker(
     onAdd: () -> Unit,
     onChange: (WidgetShape?) -> Unit
 ) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    // Same order as the tiles below: None, built-ins, your shapes (-1 = not found yet).
+    val selectedIndex = when {
+        shape == null -> 0
+        shape in Shapes.all -> 1 + Shapes.all.indexOf(shape)
+        shape in customShapes -> 1 + Shapes.all.size + customShapes.indexOf(shape)
+        else -> -1
+    }
+    LazyRow(
+        state = rememberRowShowing(selectedIndex),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
         item {
             ShapeTile(stringResource(R.string.shape_none), selected = shape == null, enabled = enabled, onClick = { onChange(null) }) { color ->
                 // A crossed-out circle: "no shape".
@@ -159,6 +175,24 @@ fun ShapePicker(
             }
         }
     }
+}
+
+/**
+ * The scroll state for a sideways picker row that opens showing its current choice: the first time
+ * [selectedIndex] is known (>= 0), the row jumps there (with one tile to its left), once. Taps after
+ * that never move the row. (Your shapes load a moment later, so the index can be unknown at first.)
+ */
+@Composable
+internal fun rememberRowShowing(selectedIndex: Int): LazyListState {
+    val state = rememberLazyListState()
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(selectedIndex) {
+        if (!shown && selectedIndex >= 0) {
+            shown = true
+            state.scrollToItem((selectedIndex - 1).coerceAtLeast(0))
+        }
+    }
+    return state
 }
 
 /**

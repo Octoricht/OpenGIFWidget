@@ -101,6 +101,7 @@ RemoteViews can't play GIFs directly, so:
     `refreshIfNeeded` remakes on mismatch and on size changes of the shape box (widget aspect changes don't re-crop a shape).
   - Editor: "Shape" row under Fit/Fill (None + shapes, scrolls sideways; "Custom" goes at the end later). Picking only changes
     the preview; frames are made on Save. Going from None to a shape opens Reposition once per editor visit (Fit or Fill).
+    The Shape and Background rows open scrolled to the current choice, once per editor visit (`rememberRowShowing`).
   - RAM: `UsageHealth.widgetCost` counts the mask as one extra frame when `frames.masked`; the per-widget pixel budget in
     `deriveWidgetFrames` counts it too.
 - Shape tools (v1.1, `shape/ShapeStyle.kt`): Pixel edges (was "Pixelify"; `PixelSize` Small 32 / Medium 20 / Chonky 12

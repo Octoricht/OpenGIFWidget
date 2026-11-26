@@ -1034,10 +1034,14 @@ private fun EditorScreen(
         }
     }
 
+    // "Add to home screen" only while adding a widget; once it's placed, it's "Save".
+    // (The Save button and the tutorial's last step both use it, so they always name the same button.)
+    val saveLabel = stringResource(if (saved.gif == null && !onHomeScreen) R.string.editor_add else R.string.editor_save)
+
     // "+" at the end of the Shape row: add a new shape to your library, then use it here.
     AddShapeDialogs(
         open = addingShape,
-        tutorialDoneText = stringResource(R.string.tutorial_done_editor),
+        tutorialDoneText = stringResource(R.string.tutorial_done_editor, saveLabel),
         onClose = { addingShape = false },
         onAdded = { added ->
             library.reload()
@@ -1102,8 +1106,7 @@ private fun EditorScreen(
                 busy = busy,
                 // Finish repositioning first (Done or Cancel), so a half-done move is never saved.
                 enabled = master != null && busy == null && !repositioning,
-                // "Add to home screen" only while adding a widget; once it's placed, it's "Save".
-                label = stringResource(if (saved.gif == null && !onHomeScreen) R.string.editor_add else R.string.editor_save),
+                label = saveLabel,
                 onSave = { onSave() },
                 onCancel = { videoJob?.cancel() }
             )
