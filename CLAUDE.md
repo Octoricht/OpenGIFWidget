@@ -179,7 +179,7 @@ RemoteViews can't play GIFs directly, so:
   sometimes keep "ghost" ids from cancelled setups (OnePlus: adding from the home screen widget menu, then cancelling
   the editor). So the editor sets `hidden_<id>` itself when it closes without saving and the widget has no picture.
   Launchers usually clean ghosts up on restart (then onDeleted runs).
-- Slideshow (v1.1, in progress): a second widget kind. `SlideshowWidgetProvider` (empty subclass of the `open`
+- Slideshow (v1.1, done): a second widget kind. `SlideshowWidgetProvider` (empty subclass of the `open`
   `GifWidgetProvider`, own receiver + `xml/slideshow_widget_info.xml` + `widget_preview_slideshow`) so the launcher's
   widget list shows two entries. `GifWidgetProvider.isSlideshow(context, id)` asks the launcher which kind a widget is;
   ALWAYS list widgets with `GifWidgetProvider.allWidgetIds` (both kinds), never `getAppWidgetIds` of one class
