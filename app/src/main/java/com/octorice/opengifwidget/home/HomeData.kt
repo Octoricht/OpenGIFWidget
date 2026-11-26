@@ -9,6 +9,8 @@ import com.octorice.opengifwidget.data.ScaleMode
 import com.octorice.opengifwidget.data.StoredGif
 import com.octorice.opengifwidget.data.WidgetBackground
 import com.octorice.opengifwidget.data.WidgetStore
+import com.octorice.opengifwidget.data.WidgetTap
+import com.octorice.opengifwidget.data.WidgetTaps
 import com.octorice.opengifwidget.shape.Shapes
 import com.octorice.opengifwidget.shape.WidgetShape
 import com.octorice.opengifwidget.widget.GifWidgetProvider
@@ -37,7 +39,8 @@ data class WidgetSummary(
     val slideStart: Int = 0,
     val framesDir: File?,    // the widget's own frames, played as the card's preview
     val aspectRatio: Float,  // width / height of the widget on the home screen
-    val storageBytes: Long
+    val storageBytes: Long,
+    val tap: WidgetTap = WidgetTap.EDIT // what a tap on the home screen does (shown as a small icon)
 )
 
 object HomeData {
@@ -91,7 +94,8 @@ object HomeData {
                 shape = if (gif?.frames?.masked == true) Shapes.byId(context, WidgetStore.getFramesShapeId(context, id)) else null,
                 framesDir = gif?.frames?.let { GifStorage.framesDir(context, id, it.version) },
                 aspectRatio = WidgetSizes.aspectRatio(context, id),
-                storageBytes = GifStorage.widgetStorageBytes(context, id)
+                storageBytes = GifStorage.widgetStorageBytes(context, id),
+                tap = WidgetTaps.usable(context, id, slideshow)
             )
         }
     }

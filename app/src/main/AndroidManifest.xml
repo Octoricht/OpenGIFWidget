@@ -9,6 +9,18 @@
     -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!--
+        "When tapped: Open an app" lists the apps you could open. Since Android 11 an app only sees
+        the apps it declares here. This asks only for apps with a home screen icon: it's not a
+        permission (nothing to allow) and the list never leaves the phone.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -88,7 +100,7 @@
                 android:resource="@xml/slideshow_widget_info" />
         </receiver>
 
-        <!-- Slow slideshows (5 min or more per picture): the timer that shows the next picture. -->
+        <!-- Slideshows: the slow slideshow timer, and "When tapped: Next picture". -->
         <receiver
             android:name=".widget.NextPictureReceiver"
             android:exported="false" />

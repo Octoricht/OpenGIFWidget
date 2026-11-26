@@ -219,6 +219,19 @@ RemoteViews can't play GIFs directly, so:
     Removed pictures' folders are deleted on Save or when the editor closes (unsaved picks are NOT discarded per pick).
   - Editor order: pictures, Add pictures, Display, Shape, Playback (`SlideshowPlayback`), Background. Playback sits
     after Shape in BOTH editors (normal: Speed).
+- When tapped (v1.1, `data/WidgetTap.kt`, `config/TapUi.kt`): per widget Edit (default, `tap_<id>` absent) / App
+  (`tap_app_<id>` = flattened ComponentName) / Next (slow slideshows only) / Nothing (null PendingIntent). Changing it
+  never remakes frames. ALWAYS use `WidgetTaps.usable()` (uninstalled app or Next on a non-slow widget = Edit); a
+  widget without frames always opens the editor. App opens the launcher intent (follows a renamed start screen via
+  getLaunchIntentForPackage). Seeing apps: manifest `<queries>` for MAIN/LAUNCHER (no permission). Editor: last
+  section, segmented buttons + one line saying what a tap does (App/Nothing: "Edit this widget from OpenGIFWidget");
+  App with no app yet opens `AppPickerSheet` (pull-up, search focused, A-Z), closing it without a pick reverts.
+  Next only shows at 5 min+ per picture; switching to a fast time goes back to the last other choice (`tapBeforeNext`).
+  Cards: app icon + name (normal) / icon only (slideshow stats row), Next / Nothing icons; nothing for Edit.
+  - Next on FAST slideshows is impossible: `RemoteViews.showNext` is MERGE_IGNORE, so a partial update's "flip once"
+    is dropped before reaching the launcher (and the app can't know the flipper's current child). Don't retry it
+    (stable ids, unique-label tricks were tried and failed). Slow ones: `NextPictureReceiver` ACTION_TAP_NEXT ->
+    `advance` + full redraw (the new picture gets its full time).
 - New widgets default to Fill.
 - Widget shape (`WidgetSizes.currentSizeDp`): portrait = min width x max height, landscape = max width x min height.
   Landscape only counts on big screens (smallestScreenWidthDp >= 600, e.g. tablets): phone home screens stay portrait

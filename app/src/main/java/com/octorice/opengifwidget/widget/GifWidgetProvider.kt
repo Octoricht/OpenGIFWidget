@@ -13,7 +13,10 @@ import com.octorice.opengifwidget.config.GifConfigActivity
 import com.octorice.opengifwidget.data.AppSettings
 import com.octorice.opengifwidget.data.GifStorage
 import com.octorice.opengifwidget.data.ScaleMode
+import com.octorice.opengifwidget.data.TapAction
 import com.octorice.opengifwidget.data.Transition
+import com.octorice.opengifwidget.data.WidgetTap
+import com.octorice.opengifwidget.data.WidgetTaps
 import com.octorice.opengifwidget.data.WidgetStore
 import com.octorice.opengifwidget.provider.FrameProvider
 
@@ -191,11 +194,7 @@ open class GifWidgetProvider : AppWidgetProvider() {
                         order = if (WidgetStore.getShuffle(context, appWidgetId)) all.shuffled() else all
                         intervalMs = WidgetStore.getSlideSeconds(context, appWidgetId) * 1000
                         // Each transition is its own flipper in the layout (animations can't be set from code).
-                        flipper = when (WidgetStore.getTransition(context, appWidgetId)) {
-                            Transition.NONE -> R.id.widget_flipper
-                            Transition.FADE -> R.id.widget_flipper_fade
-                            Transition.SLIDE -> R.id.widget_flipper_slide
-                        }
+                        flipper = slideshowFlipper(context, appWidgetId)
                     } else {
                         // Fast animations show fewer frames, spread evenly, so the launcher never flips
                         // faster than the FPS cap (see Playback). Frames left out aren't loaded at all.
@@ -248,11 +247,35 @@ open class GifWidgetProvider : AppWidgetProvider() {
                 views.setInt(R.id.widget_bg, "setImageAlpha", background.alpha)
             }
 
-            // Tapping the widget opens the GIF picker for this widget.
-            views.setOnClickPendingIntent(android.R.id.background, configIntent(context, appWidgetId))
+            // What a tap does (When tapped in the editor). Without a picture yet, a tap always opens the
+            // editor, so a new widget can always be set up. Nothing = no tap action at all (null).
+            val tap = if (frames == null) WidgetTap.EDIT else WidgetTaps.usable(context, appWidgetId, isSlideshow(context, appWidgetId))
+            views.setOnClickPendingIntent(android.R.id.background, tapIntent(context, appWidgetId, tap))
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
+
+        /** The flipper a fast slideshow plays in: each transition is its own flipper in the layout. */
+        private fun slideshowFlipper(context: Context, appWidgetId: Int): Int =
+            when (WidgetStore.getTransition(context, appWidgetId)) {
+                Transition.NONE -> R.id.widget_flipper
+                Transition.FADE -> R.id.widget_flipper_fade
+                Transition.SLIDE -> R.id.widget_flipper_slide
+            }
+
+        /** The tap's PendingIntent, or null for "Do nothing". requestCode = widget id, as everywhere. */
+        private fun tapIntent(context: Context, appWidgetId: Int, tap: WidgetTap): PendingIntent? =
+            when (tap.action) {
+                TapAction.EDIT -> configIntent(context, appWidgetId)
+                TapAction.NOTHING -> null
+                // (usable() already checked that the app is installed / that this is a slow slideshow.)
+                TapAction.APP -> tap.app?.let { WidgetTaps.launchIntent(context, it) }?.let {
+                    PendingIntent.getActivity(
+                        context, appWidgetId, it, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                } ?: configIntent(context, appWidgetId)
+                TapAction.NEXT -> SlowSlideshow.tapNextIntent(context, appWidgetId)
+            }
 
         private fun configIntent(context: Context, appWidgetId: Int): PendingIntent {
             val intent = Intent(context, GifConfigActivity::class.java).apply {

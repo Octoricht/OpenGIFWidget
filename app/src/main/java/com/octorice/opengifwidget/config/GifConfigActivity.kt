@@ -112,6 +112,9 @@ import com.octorice.opengifwidget.data.ImportException
 import com.octorice.opengifwidget.data.WidgetBackground
 import com.octorice.opengifwidget.data.friendlyErrors
 import com.octorice.opengifwidget.ui.BackgroundPicker
+import com.octorice.opengifwidget.data.TapAction
+import com.octorice.opengifwidget.data.WidgetTap
+import com.octorice.opengifwidget.data.WidgetTaps
 import com.octorice.opengifwidget.ui.ShapePicker
 import com.octorice.opengifwidget.ui.SliderLabel
 import com.octorice.opengifwidget.ui.AddShapeDialogs
@@ -233,7 +236,9 @@ class GifConfigActivity : ComponentActivity() {
                 spin = WidgetStore.getSpin(this, appWidgetId),
                 style = WidgetStore.getShapeStyle(this, appWidgetId),
                 background = WidgetStore.getBackground(this, appWidgetId),
-                speed = WidgetStore.getSpeed(this, appWidgetId)
+                speed = WidgetStore.getSpeed(this, appWidgetId),
+                // What a tap really does now (an uninstalled app shows as Edit, which Save then keeps).
+                tap = WidgetTaps.usable(this, appWidgetId, GifWidgetProvider.isSlideshow(this, appWidgetId))
             ),
             slides = WidgetStore.getSlides(this, appWidgetId),
             playback = SlideshowPlayback(
@@ -472,6 +477,7 @@ class GifConfigActivity : ComponentActivity() {
         WidgetStore.saveShapeStyle(context, appWidgetId, settings.style)
         WidgetStore.saveBackground(context, appWidgetId, settings.background)
         WidgetStore.saveName(context, appWidgetId, settings.name.trim().ifEmpty { defaultName })
+        WidgetTaps.save(context, appWidgetId, settings.tap)
         WidgetStore.setHidden(context, appWidgetId, false)
         // New pictures, order or timing: a slow slideshow starts again from its first picture, with a full wait.
         if (remakeFrames || playback != oldPlayback) {
@@ -537,6 +543,7 @@ class GifConfigActivity : ComponentActivity() {
         WidgetStore.saveSpeed(context, appWidgetId, settings.speed)
         // An empty name falls back to the file's name.
         WidgetStore.saveName(context, appWidgetId, settings.name.trim().ifEmpty { WidgetStore.defaultName(gif.name) })
+        WidgetTaps.save(context, appWidgetId, settings.tap)
         WidgetStore.setHidden(context, appWidgetId, false) // set up again: show it in the app's list
         GifStorage.deleteFramesExcept(context, appWidgetId, setOf(master.version, frames.version))
         GifWidgetProvider.updateWidget(context, AppWidgetManager.getInstance(context), appWidgetId)
@@ -609,7 +616,8 @@ private data class EditorSettings(
     val spin: Float?,          // "Make the CD spin": seconds per turn, null = off (only for shapes that spin)
     val style: ShapeStyle,     // shape tools: Pixelify size, Reverse (only apply with a shape)
     val background: WidgetBackground,
-    val speed: Float
+    val speed: Float,
+    val tap: WidgetTap = WidgetTap.EDIT // When tapped: what a tap on the home screen does
 )
 
 /** What the widget uses right now, to know whether anything changed. */
@@ -710,6 +718,15 @@ private fun EditorScreen(
     var background by remember { mutableStateOf(saved.settings.background) }
     var name by remember { mutableStateOf(saved.settings.name) }
     var speed by remember { mutableFloatStateOf(saved.settings.speed) }
+    // When tapped. [tapApp] stays remembered while you try other choices, so App comes back with it.
+    var tapAction by remember { mutableStateOf(saved.settings.tap.action) }
+    var tapApp by remember { mutableStateOf(saved.settings.tap.app) }
+    var pickingApp by remember { mutableStateOf(false) }
+    // What to go back to when the app picker is closed without picking one.
+    var actionBeforePicking by remember { mutableStateOf(tapAction) }
+    // The last choice other than Next: a slideshow set to a fast time goes back to it (Next is slow-only).
+    var tapBeforeNext by remember { mutableStateOf(if (tapAction == TapAction.NEXT) TapAction.EDIT else tapAction) }
+    fun currentTap() = if (tapAction == TapAction.APP) WidgetTap(TapAction.APP, tapApp) else WidgetTap(tapAction)
     // Once you type your own name, picking another file doesn't overwrite it.
     var nameEdited by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf<Busy?>(null) }
@@ -804,6 +821,7 @@ private fun EditorScreen(
         background != saved.settings.background ||
         name != saved.settings.name ||
         speed != saved.settings.speed ||
+        currentTap() != saved.settings.tap ||
         (slideshow && currentPlayback() != saved.playback)
 
     // Don't leave halfway through preparing or saving. While taking frames from a video,
@@ -986,7 +1004,8 @@ private fun EditorScreen(
             error = null
             try {
                 val settings = EditorSettings(
-                    name, scaleMode, Offset(0.5f, 0.5f), roundCorners, shape, null, null, currentStyle(), background, 1f
+                    name, scaleMode, Offset(0.5f, 0.5f), roundCorners, shape, null, null, currentStyle(), background, 1f,
+                    currentTap()
                 )
                 saveSlideshow(slides, settings, currentPlayback(), remakeFrames()) { done, total ->
                     busy = Busy.Saving(done, total)
@@ -1013,7 +1032,9 @@ private fun EditorScreen(
             busy = Busy.Saving(0, 0)
             error = null
             try {
-                val settings = EditorSettings(name, scaleMode, cropCenter, roundCorners, shape, customZoom, spin, currentStyle(), background, speed)
+                val settings = EditorSettings(
+                    name, scaleMode, cropCenter, roundCorners, shape, customZoom, spin, currentStyle(), background, speed, currentTap()
+                )
                 save(gif, settings, remakeFrames(), widgetAspectRatio) { done, total ->
                     busy = Busy.Saving(done, total)
                 }
@@ -1067,6 +1088,24 @@ private fun EditorScreen(
             pickShape(added)
         }
     )
+
+    if (pickingApp) {
+        AppPickerSheet(
+            selected = tapApp.takeIf { tapAction == TapAction.APP },
+            onPick = { app ->
+                tapApp = app
+                tapAction = TapAction.APP
+                tapBeforeNext = TapAction.APP
+                pickingApp = false
+            },
+            onDismiss = {
+                // Closed without picking: back to what it was (App only if an app is already chosen).
+                tapAction = if (actionBeforePicking == TapAction.APP && tapApp == null) TapAction.EDIT else actionBeforePicking
+                if (tapAction != TapAction.NEXT) tapBeforeNext = tapAction
+                pickingApp = false
+            }
+        )
+    }
 
     // Fit / Fill for all, with pictures repositioned by hand: confirm before undoing them.
     presetForAll?.let { mode ->
@@ -1411,7 +1450,11 @@ private fun EditorScreen(
                             shuffle = shuffle,
                             // (Finish repositioning first: Done or Cancel.)
                             enabled = busy == null && !repositioning,
-                            onSeconds = { slideSeconds = it },
+                            onSeconds = {
+                                slideSeconds = it
+                                // Fast again: Next isn't possible there, so go back to the last other choice.
+                                if (!SlideTiming.isSlow(it) && tapAction == TapAction.NEXT) tapAction = tapBeforeNext
+                            },
                             onTransition = {
                                 transition = it
                                 // Show it: the preview moves on to the next picture with the new transition.
@@ -1434,6 +1477,30 @@ private fun EditorScreen(
                     Spacer(Modifier.height(24.dp))
                     SectionTitle(stringResource(R.string.editor_background), R.drawable.ic_background)
                     BackgroundPicker(background, enabled = busy == null, onChange = { background = it })
+
+                    // When tapped: the very last section.
+                    Spacer(Modifier.height(24.dp))
+                    TapSection(
+                        action = tapAction,
+                        app = tapApp,
+                        showNext = slideshow && SlideTiming.isSlow(slideSeconds),
+                        enabled = busy == null,
+                        onAction = { choice ->
+                            if (choice != TapAction.NEXT) tapBeforeNext = choice
+                            if (choice == TapAction.APP && tapApp == null) {
+                                // No app yet: choose one right away (closing the picker goes back).
+                                actionBeforePicking = tapAction
+                                tapAction = TapAction.APP
+                                pickingApp = true
+                            } else {
+                                tapAction = choice
+                            }
+                        },
+                        onPickApp = {
+                            actionBeforePicking = tapAction
+                            pickingApp = true
+                        }
+                    )
 
                     error?.let {
                         Spacer(Modifier.height(16.dp))

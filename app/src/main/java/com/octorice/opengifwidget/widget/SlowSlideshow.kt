@@ -22,6 +22,22 @@ import com.octorice.opengifwidget.data.WidgetStore
 object SlowSlideshow {
 
     private const val ACTION_NEXT = "com.octorice.opengifwidget.NEXT_PICTURE"
+    // "When tapped: Next picture" (slow slideshows only: in fast ones the launcher's own timer decides
+    // which picture is up, and Android drops a "flip once" request before it reaches the launcher,
+    // so the app can't move them on). Its own action, so it never
+    // replaces or cancels the slow slideshow's timer (same receiver, same request code).
+    const val ACTION_TAP_NEXT = "com.octorice.opengifwidget.TAP_NEXT_PICTURE"
+
+    /** The widget's tap when it's set to "Next picture". */
+    fun tapNextIntent(context: Context, appWidgetId: Int): PendingIntent =
+        PendingIntent.getBroadcast(
+            context,
+            appWidgetId,
+            Intent(context, NextPictureReceiver::class.java)
+                .setAction(ACTION_TAP_NEXT)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
     /** True for a slideshow with 5 minutes or more per picture. */
     fun isSlow(context: Context, appWidgetId: Int): Boolean =
@@ -110,7 +126,10 @@ object SlowSlideshow {
     }
 }
 
-/** The slow slideshow timer went off: show the next picture (redrawing sets the next timer). */
+/**
+ * The slow slideshow timer went off, or a slow slideshow set to "Next picture" was tapped: show the
+ * next picture (redrawing sets the next timer, so after a tap the new picture gets its full time).
+ */
 class NextPictureReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)

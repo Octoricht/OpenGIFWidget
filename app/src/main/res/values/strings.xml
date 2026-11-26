@@ -334,4 +334,23 @@
     <string name="color_mint">Mint</string>
     <string name="color_butter">Butter</string>
     <string name="color_peach">Peach</string>
+
+    <!-- Editor: When tapped (what tapping the widget on the home screen does) -->
+    <string name="tap_title">When tapped</string>
+    <string name="tap_edit">Edit</string>
+    <string name="tap_app">App</string>
+    <string name="tap_next">Next</string>
+    <string name="tap_nothing">Nothing</string>
+    <string name="tap_edit_description">Opens this editor.</string>
+    <string name="tap_app_description">Opens the app. Edit this widget from OpenGIFWidget.</string>
+    <string name="tap_next_description">Shows the next picture right away.</string>
+    <string name="tap_nothing_description">Taps do nothing. Edit this widget from OpenGIFWidget.</string>
+    <string name="tap_change_app">Change</string>
+    <string name="tap_choose_app">Choose an app</string>
+    <string name="tap_search_apps">Search apps</string>
+    <string name="tap_no_apps_match">No apps match \"%1$s\".</string>
+    <!-- Cards: read out by TalkBack for the small icons -->
+    <string name="card_tap_app">Tap opens %1$s</string>
+    <string name="card_tap_next">Tap shows the next picture</string>
+    <string name="card_tap_nothing">Taps do nothing</string>
 </resources>

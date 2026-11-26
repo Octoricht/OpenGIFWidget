@@ -81,6 +81,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.octorice.opengifwidget.data.TapAction
+import com.octorice.opengifwidget.data.WidgetTap
+import com.octorice.opengifwidget.config.AppIcon
+import com.octorice.opengifwidget.ui.rememberInstalledApp
 import com.octorice.opengifwidget.R
 import com.octorice.opengifwidget.data.AppSettings
 import com.octorice.opengifwidget.data.ScaleMode
@@ -495,6 +499,7 @@ private fun WidgetCard(
                     count = frames.frameCount,
                     seconds = frames.intervalMs / 1000,
                     shuffle = widget.shuffle,
+                    tap = widget.tap,
                     shownIndex = widget.slideOrder[position % widget.slideOrder.size],
                     description = pluralStringResource(
                         R.plurals.home_card_pictures,
@@ -522,6 +527,50 @@ private fun WidgetCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            // Not "Edit" (the usual): a small icon says what a tap on the home screen does.
+            if (!stack && frames != null && widget.tap.action != TapAction.EDIT) {
+                Spacer(Modifier.height(6.dp))
+                TapStat(widget.tap, withName = true)
+            }
+        }
+    }
+}
+
+/** What a tap does, said in words for TalkBack (null for Edit, the usual). */
+@Composable
+private fun tapDescription(tap: WidgetTap): String? {
+    val app = rememberInstalledApp(tap.app.takeIf { tap.action == TapAction.APP })
+    return when (tap.action) {
+        TapAction.APP -> stringResource(R.string.card_tap_app, app?.label.orEmpty())
+        TapAction.NEXT -> stringResource(R.string.card_tap_next)
+        TapAction.NOTHING -> stringResource(R.string.card_tap_nothing)
+        TapAction.EDIT -> null
+    }
+}
+
+/**
+ * What a tap does, as a small stat like the slideshow's: the app's own icon (and its name on normal
+ * cards, where there's room), or the Next / Nothing icon. Nothing is shown for Edit.
+ */
+@Composable
+private fun TapStat(tap: WidgetTap, withName: Boolean) {
+    val accent = MaterialTheme.colorScheme.primary
+    val app = rememberInstalledApp(tap.app.takeIf { tap.action == TapAction.APP })
+    val description = tapDescription(tap) ?: return
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.clearAndSetSemantics { contentDescription = description }
+    ) {
+        when (tap.action) {
+            TapAction.APP -> {
+                AppIcon(app, Modifier.size(16.dp))
+                if (withName && app != null) {
+                    Spacer(Modifier.width(4.dp))
+                    Text(app.label, style = MaterialTheme.typography.labelMedium, color = accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            TapAction.NEXT -> Icon(painterResource(R.drawable.ic_next_picture), null, tint = accent, modifier = Modifier.size(16.dp))
+            else -> Icon(painterResource(R.drawable.ic_tap_off), null, tint = accent, modifier = Modifier.size(16.dp))
         }
     }
 }
@@ -586,15 +635,19 @@ private fun StackLayer(dir: File?, index: Int?, depth: Int, shape: WidgetShape?,
  * up: in order it fills up like stories, with Shuffle the light jumps around.
  */
 @Composable
-private fun SlideshowStats(count: Int, seconds: Int, shuffle: Boolean, shownIndex: Int, description: String) {
+private fun SlideshowStats(count: Int, seconds: Int, shuffle: Boolean, tap: WidgetTap, shownIndex: Int, description: String) {
     val accent = MaterialTheme.colorScheme.primary
-    Column(Modifier.clearAndSetSemantics { contentDescription = description }) {
+    // TalkBack reads the whole stats block as one sentence, the tap included.
+    val tapText = tapDescription(tap)
+    Column(Modifier.clearAndSetSemantics { contentDescription = listOfNotNull(description, tapText).joinToString(". ") }) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             CardStat(R.drawable.ic_photo_library, "$count")
             CardStat(R.drawable.ic_duration, shortTime(seconds))
             if (shuffle) {
                 Icon(painterResource(R.drawable.ic_shuffle), contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
             }
+            // What a tap does (no name here: this row is already full).
+            if (tap.action != TapAction.EDIT) TapStat(tap, withName = false)
         }
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.fillMaxWidth()) {
