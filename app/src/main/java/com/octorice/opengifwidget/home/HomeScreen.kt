@@ -90,7 +90,20 @@ import com.octorice.opengifwidget.ui.SlideTransition
 import com.octorice.opengifwidget.ui.FrameImage
 import com.octorice.opengifwidget.ui.ShapedBox
 import com.octorice.opengifwidget.ui.toComposeColor
-import com.octorice.opengifwidget.ui.rememberFramePlayer
+import com.octorice.opengifwidget.ui.rememberFrameThumb
+import com.octorice.opengifwidget.ui.rememberPlayedFrame
+import com.octorice.opengifwidget.shape.WidgetShape
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -378,21 +391,51 @@ private fun WidgetCard(
                 }
             )
     ) {
+        // A slideshow card is a little stack of photos: its next pictures peek out behind the shown one.
+        val stack = widget.slideshow && frames != null && widget.slideOrder.isNotEmpty()
+        // The widget's frames are already cropped for Fill, so Fill just centers them here.
+        // (Slideshows play in their own order, a Shuffle order too, so the card knows which picture is up.)
+        val played = rememberPlayedFrame(
+            widget.framesDir, frames, maxSidePx = 512, widget.speed, fpsCap,
+            reuseBitmaps = !widget.slideshow,
+            order = if (stack) widget.slideOrder else null,
+            startPosition = widget.slideStart
+        )
+        val image = played.image
+        val position = if (played.position >= 0) played.position else widget.slideStart
+        val previewPadding = if (stack) {
+            Modifier.padding(start = 8.dp, bottom = 8.dp, top = 8.dp + STACK_STEP * 2, end = 8.dp + STACK_STEP * 2)
+        } else {
+            Modifier.padding(8.dp)
+        }
+        Box {
+            if (stack) {
+                // Back to front: the picture after next (dimmer), then the next one. Missing pictures
+                // (a slideshow of 1 or 2) are plain cards.
+                val order = widget.slideOrder
+                for (depth in 2 downTo 1) {
+                    StackLayer(
+                        dir = widget.framesDir,
+                        index = if (order.size > depth) order[(position + depth) % order.size] else null,
+                        depth = depth,
+                        shape = widget.shape,
+                        modifier = Modifier
+                            .matchParentSize()
+                            .then(previewPadding)
+                            .offset(x = STACK_STEP * depth, y = -STACK_STEP * depth)
+                    )
+                }
+            }
         // The preview has the same shape as the widget on the home screen.
         Box(
             modifier = Modifier
-                .padding(8.dp)
+                .then(previewPadding)
                 .fillMaxWidth()
                 .aspectRatio(widget.aspectRatio)
                 .clip(RoundedCornerShape(18.dp))
                 // With a shape, only the shape gets the background (drawn by ShapedBox below).
                 .then(if (widget.shape == null) Modifier.background(widget.background.toComposeColor()) else Modifier)
         ) {
-            // The widget's frames are already cropped for Fill, so Fill just centers them here.
-            val image = rememberFramePlayer(
-                widget.framesDir, frames, maxSidePx = 512, widget.speed, fpsCap,
-                reuseBitmaps = !widget.slideshow
-            )
             // A slideshow changes pictures with its transition, like on the home screen (slow ones
             // show one picture at a time there, so they just switch).
             // (Only slideshows: an animation's frames simply replace each other. Two frames on screen at
@@ -420,13 +463,6 @@ private fun WidgetCard(
                         frame(shown, widget.background.copy(alpha = 0))
                     }
                 }
-                ModeBadge(
-                    widget.scaleMode,
-                    zoomed = widget.zoomed,
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                )
                 // This widget costs a lot of the home screen's memory.
                 if (heavy) {
                     HeavyTag(
@@ -445,6 +481,7 @@ private fun WidgetCard(
                 )
             }
         }
+        }
         Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp)) {
             Text(
                 widget.name.ifEmpty { stringResource(R.string.no_picture_yet) },
@@ -453,15 +490,22 @@ private fun WidgetCard(
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(Modifier.height(2.dp))
-            Text(
-                when {
-                    frames == null -> stringResource(R.string.widget_tap_to_choose)
-                    widget.slideshow -> pluralStringResource(
+            if (stack && frames != null) {
+                SlideshowStats(
+                    count = frames.frameCount,
+                    seconds = frames.intervalMs / 1000,
+                    shuffle = widget.shuffle,
+                    shownIndex = widget.slideOrder[position % widget.slideOrder.size],
+                    description = pluralStringResource(
                         R.plurals.home_card_pictures,
                         frames.frameCount,
                         frames.frameCount,
                         Formatter.formatShortFileSize(context, widget.storageBytes)
                     )
+                )
+            } else Text(
+                when {
+                    frames == null -> stringResource(R.string.widget_tap_to_choose)
                     frames.frameCount == 1 -> stringResource(
                         R.string.home_card_still,
                         Formatter.formatShortFileSize(context, widget.storageBytes)
@@ -500,27 +544,98 @@ private fun HeavyTag(modifier: Modifier = Modifier) {
     }
 }
 
-/** Small "Fit" / "Fill" pill on top of the preview. */
+/** How far each picture in a slideshow card's stack sits up and to the right of the one in front. */
+private val STACK_STEP = 6.dp
+
+/**
+ * One picture in a slideshow card's stack, behind the shown one: dimmer the further back it is
+ * ([depth] 1 = right behind). [index] null = no picture for this spot: a plain card in the stack's color.
+ */
 @Composable
-private fun ModeBadge(mode: ScaleMode, zoomed: Boolean, modifier: Modifier = Modifier) {
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = Color.Black.copy(alpha = 0.55f),
-        contentColor = Color.White,
-        modifier = modifier
-    ) {
-        Text(
-            stringResource(
-                when {
-                    zoomed -> R.string.mode_zoom
-                    mode == ScaleMode.FIT -> R.string.mode_fit
-                    else -> R.string.mode_fill
-                }
-            ),
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-        )
+private fun StackLayer(dir: File?, index: Int?, depth: Int, shape: WidgetShape?, modifier: Modifier) {
+    val colors = MaterialTheme.colorScheme
+    val plain = if (depth == 1) colors.secondaryContainer else lerp(colors.secondaryContainer, colors.surfaceContainerLow, 0.5f)
+    val corners = RoundedCornerShape(18.dp)
+    if (index == null) {
+        if (shape != null) {
+            ShapedBox(shape, WidgetBackground(plain.toArgb(), 255), modifier, cutContent = false) {}
+        } else {
+            Box(modifier.clip(corners).background(plain))
+        }
+        return
     }
+    val thumb = rememberFrameThumb(dir, index, maxSidePx = 256)
+    // Shaped pictures are already cut out; plain ones sit on the stack's color (seen in Fit's empty space).
+    Box(if (shape != null) modifier else modifier.clip(corners).background(plain)) {
+        if (thumb != null) {
+            Image(
+                thumb,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                // Darker the further back, without darkening the cut-away parts of a shape.
+                colorFilter = ColorFilter.tint(Color.Black.copy(alpha = if (depth == 1) 0.45f else 0.7f), BlendMode.SrcAtop),
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
+}
+
+/**
+ * A slideshow card's stats: how many pictures, the time per picture (hourglass, like the editor) and
+ * Shuffle, then one bar per picture in the slideshow's order. The bar of the picture on the card lights
+ * up: in order it fills up like stories, with Shuffle the light jumps around.
+ */
+@Composable
+private fun SlideshowStats(count: Int, seconds: Int, shuffle: Boolean, shownIndex: Int, description: String) {
+    val accent = MaterialTheme.colorScheme.primary
+    Column(Modifier.clearAndSetSemantics { contentDescription = description }) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            CardStat(R.drawable.ic_photo_library, "$count")
+            CardStat(R.drawable.ic_duration, shortTime(seconds))
+            if (shuffle) {
+                Icon(painterResource(R.drawable.ic_shuffle), contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.fillMaxWidth()) {
+            repeat(count) { i ->
+                val lit = if (shuffle) i == shownIndex else i <= shownIndex
+                val color by animateColorAsState(
+                    when {
+                        i == shownIndex -> accent
+                        lit -> accent.copy(alpha = 0.55f)
+                        else -> accent.copy(alpha = 0.2f)
+                    },
+                    label = "slide bar"
+                )
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(color)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CardStat(icon: Int, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(painterResource(icon), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, maxLines = 1)
+    }
+}
+
+/** "3 s", "5 min", "1 h", "1 day": short, for the card. */
+@Composable
+private fun shortTime(seconds: Int): String = when {
+    seconds >= 86400 && seconds % 86400 == 0 -> pluralStringResource(R.plurals.slideshow_days, seconds / 86400, seconds / 86400)
+    seconds >= 3600 && seconds % 3600 == 0 -> stringResource(R.string.card_hours_short, seconds / 3600)
+    seconds >= 60 && seconds % 60 == 0 -> stringResource(R.string.card_minutes_short, seconds / 60)
+    else -> stringResource(R.string.card_seconds_short, seconds)
 }
 
 @Composable

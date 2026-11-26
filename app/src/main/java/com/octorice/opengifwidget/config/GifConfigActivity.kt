@@ -397,6 +397,9 @@ class GifConfigActivity : ComponentActivity() {
                 try {
                     friendlyErrors(cleanUp = { outDir.deleteRecursively() }) {
                         val imported = GifStorage.importFile(context, uri, appWidgetId)
+                        // A slideshow only shows still pictures, so a GIF would never move: GIFs go in a
+                        // normal widget instead (the photo picker can't hide them, so they're refused here).
+                        if (imported.isGif) throw ImportException(R.string.error_slideshow_gif)
                         val master = FrameExtractor.extractMasterFromImage(copy, outDir, version)
                         slides += Slide(master, imported.name, imported.sizeBytes)
                     }
@@ -423,7 +426,7 @@ class GifConfigActivity : ComponentActivity() {
         onProgress: (Int, Int) -> Unit
     ) = withContext(Dispatchers.IO) {
         val context = applicationContext
-        if (slides.isEmpty()) throw ImportException(R.string.error_frames_missing)
+        if (slides.size < MIN_SLIDES) throw ImportException(R.string.error_frames_missing)
         val old = WidgetStore.getGif(context, appWidgetId)
         var frames = old?.frames
         // A slow slideshow only ever shows one picture, so it costs the launcher much less RAM.
@@ -973,7 +976,7 @@ private fun EditorScreen(
     }
 
     fun onSaveSlideshow() {
-        if (slides.isEmpty()) return
+        if (slides.size < MIN_SLIDES) return
         if (!hasChanges()) {
             onSaved()
             return
@@ -1121,7 +1124,8 @@ private fun EditorScreen(
             SaveBar(
                 busy = busy,
                 // Finish repositioning first (Done or Cancel), so a half-done move is never saved.
-                enabled = master != null && busy == null && !repositioning,
+                // (A slideshow needs at least MIN_SLIDES pictures.)
+                enabled = master != null && busy == null && !repositioning && (!slideshow || slides.size >= MIN_SLIDES),
                 label = saveLabel,
                 onSave = { onSave() },
                 onCancel = { videoJob?.cancel() }
@@ -1210,7 +1214,8 @@ private fun EditorScreen(
                             onGallery = {
                                 slidePhotoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                             },
-                            onFiles = { slideFilePicker.launch(arrayOf("image/*")) }
+                            // Still pictures only: GIFs are hidden here (they'd never move in a slideshow).
+                            onFiles = { slideFilePicker.launch(SLIDE_FILE_TYPES) }
                         )
                     } else {
                         Text(

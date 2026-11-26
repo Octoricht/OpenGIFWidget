@@ -30,6 +30,11 @@ data class WidgetSummary(
     val slideshow: Boolean,  // a slideshow: its frames are its pictures
     val slowSlideshow: Boolean, // 5 min or more per picture: only one picture is shown at a time
     val transition: Transition, // a slideshow's change from one picture to the next
+    val shuffle: Boolean = false, // a slideshow plays its pictures in a random order
+    // A slideshow's play order (frame numbers; a Shuffle order too) and where the card starts in it
+    // (slow slideshows: the picture the widget shows now). Empty for normal widgets.
+    val slideOrder: List<Int> = emptyList(),
+    val slideStart: Int = 0,
     val framesDir: File?,    // the widget's own frames, played as the card's preview
     val aspectRatio: Float,  // width / height of the widget on the home screen
     val storageBytes: Long
@@ -52,8 +57,27 @@ object HomeData {
                     stored
                 }
             }
+            val count = gif?.frames?.frameCount ?: 0
+            val shuffle = slideshow && WidgetStore.getShuffle(context, id)
+            val slow = SlowSlideshow.isSlow(context, id)
+            var slideOrder = emptyList<Int>()
+            var slideStart = 0
+            if (slideshow && count > 0) {
+                // Slow: follow the widget (its saved order and picture). Fast: like the widget, a fresh
+                // Shuffle order each time it's drawn.
+                val saved = if (slow) WidgetStore.getSlidePosition(context, id) else null
+                slideOrder = when {
+                    saved != null && shuffle && saved.order.sorted() == (0 until count).toList() -> saved.order
+                    shuffle -> (0 until count).shuffled()
+                    else -> (0 until count).toList()
+                }
+                slideStart = saved?.position?.takeIf { it in 0 until count } ?: 0
+            }
             WidgetSummary(
                 appWidgetId = id,
+                shuffle = shuffle,
+                slideOrder = slideOrder,
+                slideStart = slideStart,
                 gif = gif,
                 name = WidgetStore.displayName(context, id, gif),
                 scaleMode = WidgetStore.getScaleMode(context, id),
@@ -62,7 +86,7 @@ object HomeData {
                 // (Slideshow frames are always boxed, but that's their Fit / Fill, not a custom zoom.)
                 zoomed = gif?.frames?.boxed == true && !slideshow,
                 slideshow = slideshow,
-                slowSlideshow = SlowSlideshow.isSlow(context, id),
+                slowSlideshow = slow,
                 transition = WidgetStore.getTransition(context, id),
                 shape = if (gif?.frames?.masked == true) Shapes.byId(context, WidgetStore.getFramesShapeId(context, id)) else null,
                 framesDir = gif?.frames?.let { GifStorage.framesDir(context, id, it.version) },

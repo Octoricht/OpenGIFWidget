@@ -33,8 +33,11 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** A frame being shown, and the folder it came from. */
-data class PlayedFrame(val dir: File?, val image: ImageBitmap?)
+/**
+ * A frame being shown, and the folder it came from. With a play [order] (slideshow cards): [index] = which
+ * frame it is, [position] = where it is in that order (both -1 otherwise).
+ */
+data class PlayedFrame(val dir: File?, val image: ImageBitmap?, val index: Int = -1, val position: Int = -1)
 
 /**
  * Plays a saved frame set on screen, the same way the widget does (same frames, same speed).
@@ -66,14 +69,17 @@ fun rememberPlayedFrame(
     speed: Float = 1f,
     fpsCap: Int = AppSettings.DEFAULT_FPS_CAP,
     reuseBitmaps: Boolean = true,
-    keepWhileLoading: Boolean = false
+    keepWhileLoading: Boolean = false,
+    // Slideshow cards: the frames in play order (a Shuffle order, too), starting at [startPosition].
+    order: List<Int>? = null,
+    startPosition: Int = 0
 ): PlayedFrame {
     var current by remember(if (keepWhileLoading) Unit else dir) { mutableStateOf(PlayedFrame(null, null)) }
     // Read the newest values on every frame, so moving the speed slider changes the
     // preview right away without restarting the animation.
     val latestSpeed by rememberUpdatedState(speed)
     val latestFpsCap by rememberUpdatedState(fpsCap)
-    LaunchedEffect(dir, frames, maxSidePx) {
+    LaunchedEffect(dir, frames, maxSidePx, order) {
         if (dir == null || frames == null || frames.frameCount <= 0) {
             current = PlayedFrame(null, null)
             return@LaunchedEffect
@@ -84,19 +90,33 @@ fun rememberPlayedFrame(
         while (isActive) {
             val plan = Playback.plan(frames.frameCount, frames.intervalMs, latestSpeed, latestFpsCap)
             val start = SystemClock.uptimeMillis()
-            val index = plan.frames[step % plan.frames.size]
+            val position = if (order.isNullOrEmpty()) -1 else (startPosition + step) % order.size
+            val index = if (position >= 0) order!![position] else plan.frames[step % plan.frames.size]
             val file = File(dir, FrameFiles.frameFileName(index))
             val next = withContext(Dispatchers.IO) { FrameFiles.decode(file, maxSidePx, if (reuseBitmaps) spare else null) }
                 ?: return@LaunchedEffect // frames deleted (e.g. replaced): stop quietly
             spare = shown
             shown = next
-            current = PlayedFrame(dir, next.asImageBitmap())
+            current = if (position >= 0) PlayedFrame(dir, next.asImageBitmap(), index, position) else PlayedFrame(dir, next.asImageBitmap())
             if (frames.frameCount == 1) return@LaunchedEffect // a single picture doesn't need a loop
             step++
             delay(max(0L, plan.intervalMs - (SystemClock.uptimeMillis() - start)))
         }
     }
     return current
+}
+
+/** One frame of a set as a small still picture (the slideshow card's stack). null while loading / unreadable. */
+@Composable
+fun rememberFrameThumb(dir: File?, index: Int?, maxSidePx: Int): ImageBitmap? {
+    var thumb by remember(dir, index) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(dir, index, maxSidePx) {
+        if (dir == null || index == null) return@LaunchedEffect
+        thumb = withContext(Dispatchers.IO) {
+            FrameFiles.decode(File(dir, FrameFiles.frameFileName(index)), maxSidePx)?.asImageBitmap()
+        }
+    }
+    return thumb
 }
 
 /** Where the picture goes inside a box of [boxWidth] x [boxHeight] pixels in Fill mode. */

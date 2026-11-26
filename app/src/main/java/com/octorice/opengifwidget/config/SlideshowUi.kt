@@ -95,6 +95,14 @@ private const val GRID_COLUMNS = 4
 /** The most pictures in one slideshow (they all sit in the launcher's RAM at once). */
 internal const val MAX_SLIDES = 20
 
+/** A slideshow needs at least 2 pictures (one picture is a normal widget). */
+internal const val MIN_SLIDES = 2
+
+/** The picture types Files offers for a slideshow: every common still picture, but no GIFs. */
+internal val SLIDE_FILE_TYPES = arrayOf(
+    "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "image/avif", "image/bmp"
+)
+
 /**
  * The slideshow part of the editor: name, the pictures (a grid you can reorder by long-pressing and
  * dragging; tap = show it in the preview; the shown one has a remove button), "Add pictures"
@@ -119,7 +127,9 @@ internal fun SlideshowSection(
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             if (slides.isEmpty()) {
-                stringResource(R.string.slideshow_empty)
+                stringResource(R.string.slideshow_empty, MIN_SLIDES)
+            } else if (slides.size < MIN_SLIDES) {
+                stringResource(R.string.slideshow_need_more, MIN_SLIDES)
             } else {
                 stringResource(R.string.slideshow_count, slides.size, MAX_SLIDES)
             },

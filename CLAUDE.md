@@ -201,7 +201,7 @@ RemoteViews can't play GIFs directly, so:
     for changedAt + interval -> `NextPictureReceiver` advances + redraws. Overdue alarms fire when the phone is used again;
     reboot clears alarms, RestoreWidgetsReceiver's redraw sets them again. Non-slow redraws / onDeleted cancel it.
     Save restarts at picture 1 when pictures or playback changed. RAM: `widgetCost(onePicture = true)` = 1 frame.
-  - Pictures only (a GIF becomes its first frame), max 20 (`MAX_SLIDES`). Each picture = its own still master folder
+  - Still pictures only, 2 (`MIN_SLIDES`, Save disabled below) to 20 (`MAX_SLIDES`). GIFs are refused (`error_slideshow_gif`; Files hides them via `SLIDE_FILE_TYPES`, the photo picker cannot) so nobody expects them to play. Each picture = its own still master folder
     (`Slide(master, name, sizeBytes)`, id = master version; `GifStorage.newVersion()` keeps versions unique when several
     are imported at once). `slides_<id>` = JSON list in play order (`WidgetStore.getSlides/saveSlides`, counted by
     `usedFrameVersions`), `shuffle_<id>`. The saved `StoredGif` has no master; its widget frames = one frame per picture

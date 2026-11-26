@@ -72,6 +72,10 @@
         <item quantity="one">Slideshow · %1$d picture · %2$s</item>
         <item quantity="other">Slideshow · %1$d pictures · %2$s</item>
     </plurals>
+    <!-- A slideshow card's time per picture, kept short. -->
+    <string name="card_seconds_short">%1$d s</string>
+    <string name="card_minutes_short">%1$d min</string>
+    <string name="card_hours_short">%1$d h</string>
     <string name="home_empty_title">No widgets yet</string>
     <string name="home_empty_text">Put a widget on your home screen, pick a picture, GIF or video, and watch it play right there.</string>
     <string name="mode_fit">Fit</string>
@@ -91,11 +95,13 @@
 
     <!-- Slideshow editor -->
     <string name="slideshow_default_name">Slideshow</string>
-    <string name="slideshow_empty">No pictures yet</string>
+    <string name="slideshow_empty">No pictures yet. Pick at least %1$d.</string>
+    <string name="slideshow_need_more">Add at least one more picture: a slideshow needs %1$d or more.</string>
     <string name="slideshow_count">%1$d of %2$d pictures</string>
     <string name="slideshow_pictures">Pictures</string>
     <string name="slideshow_reorder_hint">Tap a picture to see it above. Long-press and drag to change the order.</string>
     <string name="slideshow_pick">Pick pictures for your slideshow</string>
+    <string name="error_slideshow_gif">A slideshow only shows still pictures, so GIFs were left out. Use a normal widget to play a GIF.</string>
     <string name="slideshow_add">Add pictures</string>
     <string name="slideshow_full">%1$d pictures is the most a slideshow can hold.</string>
     <string name="slideshow_too_many">A slideshow holds up to %1$d pictures, so the rest were left out.</string>
