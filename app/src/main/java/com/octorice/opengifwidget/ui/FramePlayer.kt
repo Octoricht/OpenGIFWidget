@@ -33,11 +33,15 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
+/** A frame being shown, and the folder it came from. */
+data class PlayedFrame(val dir: File?, val image: ImageBitmap?)
+
 /**
  * Plays a saved frame set on screen, the same way the widget does (same frames, same speed).
  * Frames are loaded one at a time in the background, reusing the memory of an old frame,
  * so even long animations use only two frames' worth of memory.
  * Returns the frame to show right now (null while the first one loads).
+ * [reuseBitmaps] = false for slideshows: the old picture is still on screen during a transition.
  */
 @Composable
 fun rememberFramePlayer(
@@ -45,16 +49,33 @@ fun rememberFramePlayer(
     frames: FrameSet?,
     maxSidePx: Int,
     speed: Float = 1f,
-    fpsCap: Int = AppSettings.DEFAULT_FPS_CAP
-): ImageBitmap? {
-    var current by remember(dir) { mutableStateOf<ImageBitmap?>(null) }
+    fpsCap: Int = AppSettings.DEFAULT_FPS_CAP,
+    reuseBitmaps: Boolean = true
+): ImageBitmap? = rememberPlayedFrame(dir, frames, maxSidePx, speed, fpsCap, reuseBitmaps).image
+
+/**
+ * [rememberFramePlayer], also saying which folder the frame came from. With [keepWhileLoading], the
+ * old frame stays until the new folder's first frame is ready (the slideshow editor, so tapping
+ * another picture goes straight from one to the other, with its transition).
+ */
+@Composable
+fun rememberPlayedFrame(
+    dir: File?,
+    frames: FrameSet?,
+    maxSidePx: Int,
+    speed: Float = 1f,
+    fpsCap: Int = AppSettings.DEFAULT_FPS_CAP,
+    reuseBitmaps: Boolean = true,
+    keepWhileLoading: Boolean = false
+): PlayedFrame {
+    var current by remember(if (keepWhileLoading) Unit else dir) { mutableStateOf(PlayedFrame(null, null)) }
     // Read the newest values on every frame, so moving the speed slider changes the
     // preview right away without restarting the animation.
     val latestSpeed by rememberUpdatedState(speed)
     val latestFpsCap by rememberUpdatedState(fpsCap)
     LaunchedEffect(dir, frames, maxSidePx) {
         if (dir == null || frames == null || frames.frameCount <= 0) {
-            current = null
+            current = PlayedFrame(null, null)
             return@LaunchedEffect
         }
         var shown: Bitmap? = null
@@ -65,11 +86,11 @@ fun rememberFramePlayer(
             val start = SystemClock.uptimeMillis()
             val index = plan.frames[step % plan.frames.size]
             val file = File(dir, FrameFiles.frameFileName(index))
-            val next = withContext(Dispatchers.IO) { FrameFiles.decode(file, maxSidePx, spare) }
+            val next = withContext(Dispatchers.IO) { FrameFiles.decode(file, maxSidePx, if (reuseBitmaps) spare else null) }
                 ?: return@LaunchedEffect // frames deleted (e.g. replaced): stop quietly
             spare = shown
             shown = next
-            current = next.asImageBitmap()
+            current = PlayedFrame(dir, next.asImageBitmap())
             if (frames.frameCount == 1) return@LaunchedEffect // a single picture doesn't need a loop
             step++
             delay(max(0L, plan.intervalMs - (SystemClock.uptimeMillis() - start)))

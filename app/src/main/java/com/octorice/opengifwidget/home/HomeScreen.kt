@@ -84,6 +84,8 @@ import androidx.compose.ui.unit.dp
 import com.octorice.opengifwidget.R
 import com.octorice.opengifwidget.data.AppSettings
 import com.octorice.opengifwidget.data.ScaleMode
+import com.octorice.opengifwidget.data.Transition
+import com.octorice.opengifwidget.ui.SlideTransition
 import com.octorice.opengifwidget.ui.FrameImage
 import com.octorice.opengifwidget.ui.ShapedBox
 import com.octorice.opengifwidget.ui.toComposeColor
@@ -386,15 +388,28 @@ private fun WidgetCard(
                 .then(if (widget.shape == null) Modifier.background(widget.background.toComposeColor()) else Modifier)
         ) {
             // The widget's frames are already cropped for Fill, so Fill just centers them here.
-            val image = rememberFramePlayer(widget.framesDir, frames, maxSidePx = 512, widget.speed, fpsCap)
+            val image = rememberFramePlayer(
+                widget.framesDir, frames, maxSidePx = 512, widget.speed, fpsCap,
+                reuseBitmaps = !widget.slideshow
+            )
+            // A slideshow changes pictures with its transition, like on the home screen (slow ones
+            // show one picture at a time there, so they just switch).
+            val transition = if (widget.slideshow && !widget.slowSlideshow) widget.transition else Transition.NONE
             if (image != null) {
+                // The shape's background, under the pictures.
                 if (widget.shape != null) {
-                    // Already cut into the shape: just centered, on the shape-colored background.
-                    ShapedBox(widget.shape, widget.background, Modifier.fillMaxSize(), cutContent = false) {
-                        FrameImage(image, ScaleMode.FIT, { Offset(0.5f, 0.5f) }, Modifier.fillMaxSize())
+                    ShapedBox(widget.shape, widget.background, Modifier.fillMaxSize(), cutContent = false) {}
+                }
+                SlideTransition(image, transition, Modifier.fillMaxSize()) { shown ->
+                    if (widget.shape != null) {
+                        // Already cut into the shape: just centered, on the shape-colored background.
+                        // (The shape's background stays still while the pictures change, like the widget's.)
+                        ShapedBox(widget.shape, widget.background.copy(alpha = 0), Modifier.fillMaxSize(), cutContent = false) {
+                            FrameImage(shown, ScaleMode.FIT, { Offset(0.5f, 0.5f) }, Modifier.fillMaxSize())
+                        }
+                    } else {
+                        FrameImage(shown, if (widget.zoomed || widget.slideshow) ScaleMode.FIT else widget.scaleMode, { Offset(0.5f, 0.5f) }, Modifier.fillMaxSize())
                     }
-                } else {
-                    FrameImage(image, if (widget.zoomed || widget.slideshow) ScaleMode.FIT else widget.scaleMode, { Offset(0.5f, 0.5f) }, Modifier.fillMaxSize())
                 }
                 ModeBadge(
                     widget.scaleMode,

@@ -148,7 +148,8 @@ import com.octorice.opengifwidget.gif.VideoSource
 import com.octorice.opengifwidget.widget.Playback
 import com.octorice.opengifwidget.ui.FrameImage
 import com.octorice.opengifwidget.ui.fillPlacement
-import com.octorice.opengifwidget.ui.rememberFramePlayer
+import com.octorice.opengifwidget.ui.rememberPlayedFrame
+import com.octorice.opengifwidget.ui.SlideTransition
 import com.octorice.opengifwidget.ui.theme.OpenGIFWidgetTheme
 import com.octorice.opengifwidget.widget.GifWidgetProvider
 import com.octorice.opengifwidget.widget.SlowSlideshow
@@ -731,7 +732,21 @@ private fun EditorScreen(
     // A slideshow shows the picture picked in its grid.
     val shownGif = if (slideshow) null else picked ?: saved.gif
     val master = if (slideshow) selectedSlide?.master else shownGif?.master
-    val image = rememberFramePlayer(master?.let { framesDir(it.version) }, master, maxSidePx = 1080, if (slideshow) 1f else speed, fpsCap)
+    // (A slideshow keeps the old picture until the tapped one is ready, so it goes straight from one to
+    // the other with its transition.)
+    val played = rememberPlayedFrame(
+        master?.let { framesDir(it.version) }, master, maxSidePx = 1080, if (slideshow) 1f else speed, fpsCap,
+        reuseBitmaps = !slideshow, keepWhileLoading = slideshow
+    )
+    val image = played.image
+    // Slideshow: which picture each shown image is, so the old one keeps its own crop while it goes away.
+    val imageSlides = remember { HashMap<ImageBitmap, Long>() }
+    if (slideshow && image != null) {
+        slides.firstOrNull { framesDir(it.id) == played.dir }?.let {
+            if (imageSlides.size > 40) imageSlides.clear()
+            imageSlides[image] = it.id
+        }
+    }
 
     // Zoom: the box is the shape's box, or the whole widget without a shape. Fit and Fill are two
     // points on the same scale (Fill = 1), so the preview always uses the zoom math (Zoom.box).
@@ -1150,7 +1165,20 @@ private fun EditorScreen(
                         squareCorners = shape == null && WidgetSizes.needsRoundedFrames &&
                             (scaleMode == ScaleMode.FILL || customZoom != null) && !roundCorners,
                         // The CD spins in the preview too, as fast as on the widget (speed included).
-                        spinMs = if (slideshow) null else WidgetFrames.spinFor(drawnShape, spin)?.let { (it * 1000 / speed).roundToInt() }
+                        spinMs = if (slideshow) null else WidgetFrames.spinFor(drawnShape, spin)?.let { (it * 1000 / speed).roundToInt() },
+                        // Slideshow: tapping another picture changes it like the widget does (slow ones just switch).
+                        transition = if (SlideTiming.isSlow(slideSeconds)) Transition.NONE else transition,
+                        slideCrop = if (!slideshow) null else { shown ->
+                            // How this picture is placed: its own Reposition, or the slideshow's Fit / Fill, centered.
+                            slides.firstOrNull { it.id == imageSlides[shown] }?.let { slide ->
+                                val z = slide.zoom ?: if (scaleMode == ScaleMode.FIT) {
+                                    Zoom.fitZoom(slide.master.width.toFloat(), slide.master.height.toFloat(), boxAspect)
+                                } else {
+                                    1f
+                                }
+                                z to Offset(slide.centerX, slide.centerY)
+                            }
+                        }
                     )
                 }
 
@@ -1379,7 +1407,14 @@ private fun EditorScreen(
                             // (Finish repositioning first: Done or Cancel.)
                             enabled = busy == null && !repositioning,
                             onSeconds = { slideSeconds = it },
-                            onTransition = { transition = it },
+                            onTransition = {
+                                transition = it
+                                // Show it: the preview moves on to the next picture with the new transition.
+                                if (it != Transition.NONE && slides.size > 1) {
+                                    val index = slides.indexOfFirst { slide -> slide.id == selectedSlide?.id }
+                                    selectedSlideId = slides[(index + 1) % slides.size].id
+                                }
+                            },
                             onShuffle = { shuffle = it }
                         )
                     }
@@ -1452,7 +1487,10 @@ private fun Preview(
     repositioning: Boolean,
     canReposition: Boolean,
     onStartReposition: () -> Unit,
-    onEndReposition: (keep: Boolean) -> Unit
+    onEndReposition: (keep: Boolean) -> Unit,
+    transition: Transition = Transition.NONE,
+    // Slideshow: each picture's zoom and center (null = use [zoom] / [cropCenter]); null = not a slideshow.
+    slideCrop: ((ImageBitmap) -> Pair<Float, Offset>?)? = null
 ) {
     val cornerRadius by animateDpAsState(if (squareCorners) 0.dp else 24.dp, label = "corners")
 
@@ -1514,7 +1552,22 @@ private fun Preview(
                                 }
                             }
                         }
-                        if (shape == null) {
+                        if (slideCrop != null && image != null) {
+                            // Slideshow: the pictures change with the transition. With a shape, each picture is
+                            // cut on its own and the shaped background stays still, exactly like the widget.
+                            if (shape != null) ShapedBox(shape, background, Modifier.fillMaxSize()) {}
+                            SlideTransition(image, transition, Modifier.fillMaxSize()) { shown ->
+                                val (z, c) = slideCrop(shown) ?: (zoom() to cropCenter())
+                                val drawn: @Composable () -> Unit = {
+                                    FrameImage(shown, scaleMode, { c }, Modifier.fillMaxSize(), zoom = { z })
+                                }
+                                if (shape == null) {
+                                    drawn()
+                                } else {
+                                    ShapedBox(shape, background.copy(alpha = 0), Modifier.fillMaxSize()) { drawn() }
+                                }
+                            }
+                        } else if (shape == null) {
                             picture()
                         } else {
                             ShapedBox(shape, background, Modifier.fillMaxSize()) { picture() }

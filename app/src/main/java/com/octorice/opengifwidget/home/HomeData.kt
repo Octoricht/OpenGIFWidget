@@ -1,5 +1,6 @@
 package com.octorice.opengifwidget.home
 
+import com.octorice.opengifwidget.data.Transition
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
@@ -28,6 +29,7 @@ data class WidgetSummary(
     val zoomed: Boolean,     // made with a custom zoom (the frames already have the widget's shape)
     val slideshow: Boolean,  // a slideshow: its frames are its pictures
     val slowSlideshow: Boolean, // 5 min or more per picture: only one picture is shown at a time
+    val transition: Transition, // a slideshow's change from one picture to the next
     val framesDir: File?,    // the widget's own frames, played as the card's preview
     val aspectRatio: Float,  // width / height of the widget on the home screen
     val storageBytes: Long
@@ -61,6 +63,7 @@ object HomeData {
                 zoomed = gif?.frames?.boxed == true && !slideshow,
                 slideshow = slideshow,
                 slowSlideshow = SlowSlideshow.isSlow(context, id),
+                transition = WidgetStore.getTransition(context, id),
                 shape = if (gif?.frames?.masked == true) Shapes.byId(context, WidgetStore.getFramesShapeId(context, id)) else null,
                 framesDir = gif?.frames?.let { GifStorage.framesDir(context, id, it.version) },
                 aspectRatio = WidgetSizes.aspectRatio(context, id),
