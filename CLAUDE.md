@@ -193,6 +193,8 @@ RemoteViews can't play GIFs directly, so:
   anims in `res/anim/slideshow_*`); `showOnlyFlipper` always sets all their visibilities. Time per picture
   (`slide_seconds_<id>`, `SlideTiming.CHOICES` 1-60 s, default 5) and `transition_<id>` (default FADE) are applied at
   draw time (never remake frames); `HomeData` copies the time into the card's FrameSet.intervalMs.
+  In-app previews play the transition too (`ui/SlideTransition`, same 500 ms anims; cards and the editor's tap/pick),
+  ONLY for fast slideshows: never wrap animation frames in it (two frames overlapping made shaped edges flicker).
   - Slow mode (`SlideTiming.isSlow`: 5 min, 15, 30 min, 1, 3, 6, 12 h, 1 day): `widget/SlowSlideshow.kt`. The widget
     shows ONE frame (still path) = `currentFrame` (`slide_pos_<id>`, `slide_order_<id>` with Shuffle, `slide_changed_<id>`);
     every redraw (re)sets an inexact non-waking alarm (`AlarmManager.set(RTC)`, requestCode = widget id, no permission)

@@ -84,7 +84,8 @@ import androidx.compose.ui.unit.dp
 import com.octorice.opengifwidget.R
 import com.octorice.opengifwidget.data.AppSettings
 import com.octorice.opengifwidget.data.ScaleMode
-import com.octorice.opengifwidget.data.Transition
+import com.octorice.opengifwidget.data.WidgetBackground
+import androidx.compose.ui.graphics.ImageBitmap
 import com.octorice.opengifwidget.ui.SlideTransition
 import com.octorice.opengifwidget.ui.FrameImage
 import com.octorice.opengifwidget.ui.ShapedBox
@@ -394,21 +395,29 @@ private fun WidgetCard(
             )
             // A slideshow changes pictures with its transition, like on the home screen (slow ones
             // show one picture at a time there, so they just switch).
-            val transition = if (widget.slideshow && !widget.slowSlideshow) widget.transition else Transition.NONE
+            // (Only slideshows: an animation's frames simply replace each other. Two frames on screen at
+            // once, even for a moment, would make see-through edges flicker.)
+            val transition = if (widget.slideshow && !widget.slowSlideshow) widget.transition else null
             if (image != null) {
-                // The shape's background, under the pictures.
-                if (widget.shape != null) {
-                    ShapedBox(widget.shape, widget.background, Modifier.fillMaxSize(), cutContent = false) {}
-                }
-                SlideTransition(image, transition, Modifier.fillMaxSize()) { shown ->
+                val frame: @Composable (ImageBitmap, WidgetBackground) -> Unit = { shown, shapeBackground ->
                     if (widget.shape != null) {
                         // Already cut into the shape: just centered, on the shape-colored background.
-                        // (The shape's background stays still while the pictures change, like the widget's.)
-                        ShapedBox(widget.shape, widget.background.copy(alpha = 0), Modifier.fillMaxSize(), cutContent = false) {
+                        ShapedBox(widget.shape, shapeBackground, Modifier.fillMaxSize(), cutContent = false) {
                             FrameImage(shown, ScaleMode.FIT, { Offset(0.5f, 0.5f) }, Modifier.fillMaxSize())
                         }
                     } else {
                         FrameImage(shown, if (widget.zoomed || widget.slideshow) ScaleMode.FIT else widget.scaleMode, { Offset(0.5f, 0.5f) }, Modifier.fillMaxSize())
+                    }
+                }
+                if (transition == null) {
+                    frame(image, widget.background)
+                } else {
+                    // The shape's background stays still under the changing pictures, like the widget's.
+                    if (widget.shape != null) {
+                        ShapedBox(widget.shape, widget.background, Modifier.fillMaxSize(), cutContent = false) {}
+                    }
+                    SlideTransition(image, transition, Modifier.fillMaxSize()) { shown ->
+                        frame(shown, widget.background.copy(alpha = 0))
                     }
                 }
                 ModeBadge(
