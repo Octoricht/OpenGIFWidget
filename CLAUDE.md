@@ -101,7 +101,8 @@ RemoteViews can't play GIFs directly, so:
     `refreshIfNeeded` remakes on mismatch and on size changes of the shape box (widget aspect changes don't re-crop a shape).
   - Editor: "Shape" row under Fit/Fill (None + shapes, scrolls sideways; "Custom" goes at the end later). Picking only changes
     the preview; frames are made on Save. Going from None to a shape opens Reposition once per editor visit (Fit or Fill).
-    The Shape and Background rows open scrolled to the current choice, once per editor visit (`rememberRowShowing`).
+    The Shape and Background rows open at their start, or scrolled to the current choice only if it would be off-screen
+    there (`rememberRowShowing`), so Transparent / None stay in view whenever possible.
   - RAM: `UsageHealth.widgetCost` counts the mask as one extra frame when `frames.masked`; the per-widget pixel budget in
     `deriveWidgetFrames` counts it too.
 - Shape tools (v1.1, `shape/ShapeStyle.kt`): Pixel edges (was "Pixelify"; `PixelSize` Small 32 / Medium 20 / Chonky 12
@@ -211,9 +212,11 @@ RemoteViews can't play GIFs directly, so:
     custom). Reposition in the editor moves the TAPPED picture (`repositioningSlideId`; customZoom/cropCenter are only
     working values, reset to null/center after Done/Cancel; Done on exactly the preset + centered = `reset()`). Grid
     is disabled while repositioning; repositioned tiles show a small mark. Fit/Fill for all with custom crops ->
-    `ResetCropsDialog` ("Reset N custom crops?"). Frames: `SlidePicture` carries each picture's zoom/center into
+    `ResetCropsDialog` ("Reset N repositioned pictures?"; never say "crop" to the user). Frames: `SlidePicture` carries each picture's zoom/center into
     `deriveSlideshowFrames` (same `Zoom.box` math as the preview).
     Removed pictures' folders are deleted on Save or when the editor closes (unsaved picks are NOT discarded per pick).
+  - Editor order: pictures, Add pictures, Display, Shape, Playback (`SlideshowPlayback`), Background. Playback sits
+    after Shape in BOTH editors (normal: Speed).
 - New widgets default to Fill.
 - Widget shape (`WidgetSizes.currentSizeDp`): portrait = min width x max height, landscape = max width x min height.
   Landscape only counts on big screens (smallestScreenWidthDp >= 600, e.g. tablets): phone home screens stay portrait

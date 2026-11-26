@@ -22,6 +22,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -178,19 +180,27 @@ fun ShapePicker(
 }
 
 /**
- * The scroll state for a sideways picker row that opens showing its current choice: the first time
- * [selectedIndex] is known (>= 0), the row jumps there (with one tile to its left), once. Taps after
- * that never move the row. (Your shapes load a moment later, so the index can be unknown at first.)
+ * The scroll state for a sideways picker row that opens showing its current choice. The row stays at
+ * its start (so the first options, like Transparent or None, stay in view) unless the choice is off-screen
+ * there: then it jumps to it (with one tile to its left). Checked once, when the row first knows the
+ * choice; taps after that never move the row. (Your shapes load a moment later, so the index can be
+ * unknown at first.)
  */
 @Composable
 internal fun rememberRowShowing(selectedIndex: Int): LazyListState {
     val state = rememberLazyListState()
-    var shown by remember { mutableStateOf(false) }
+    var checked by remember { mutableStateOf(false) }
     LaunchedEffect(selectedIndex) {
-        if (!shown && selectedIndex >= 0) {
-            shown = true
-            state.scrollToItem((selectedIndex - 1).coerceAtLeast(0))
-        }
+        if (checked || selectedIndex < 0) return@LaunchedEffect
+        // Wait until the row is laid out and holds the chosen item.
+        val info = snapshotFlow { state.layoutInfo }
+            .first { it.totalItemsCount > selectedIndex && it.visibleItemsInfo.isNotEmpty() }
+        checked = true
+        val item = info.visibleItemsInfo.firstOrNull { it.index == selectedIndex }
+        val fullyInView = item != null &&
+            item.offset >= info.viewportStartOffset &&
+            item.offset + item.size <= info.viewportEndOffset
+        if (!fullyInView) state.scrollToItem((selectedIndex - 1).coerceAtLeast(0))
     }
     return state
 }

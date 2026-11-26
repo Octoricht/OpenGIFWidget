@@ -144,11 +144,10 @@ fun BackgroundPicker(background: WidgetBackground, enabled: Boolean, onChange: (
                 }
             }
         }
-        Spacer(Modifier.height(12.dp))
-        Text(
-            stringResource(R.string.editor_opacity, (background.alpha / 255f * 100).roundToInt()),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+        Spacer(Modifier.height(8.dp))
+        SliderLabel(
+            stringResource(R.string.editor_opacity),
+            stringResource(R.string.editor_opacity_value, (background.alpha / 255f * 100).roundToInt())
         )
         Slider(
             value = background.alpha / 255f,

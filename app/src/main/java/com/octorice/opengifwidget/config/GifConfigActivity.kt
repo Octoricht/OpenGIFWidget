@@ -113,6 +113,7 @@ import com.octorice.opengifwidget.data.WidgetBackground
 import com.octorice.opengifwidget.data.friendlyErrors
 import com.octorice.opengifwidget.ui.BackgroundPicker
 import com.octorice.opengifwidget.ui.ShapePicker
+import com.octorice.opengifwidget.ui.SliderLabel
 import com.octorice.opengifwidget.ui.AddShapeDialogs
 import com.octorice.opengifwidget.ui.rememberShapeLibrary
 import com.octorice.opengifwidget.gif.Zoom
@@ -680,7 +681,7 @@ private fun EditorScreen(
     val library = rememberShapeLibrary()
     // Fill: the picture is locked until you tap "Reposition" (no accidental moves). Cancel goes back here.
     var repositioning by remember { mutableStateOf(false) }
-    // Slideshow: the picture being repositioned, and a Fit / Fill for all waiting for "Reset custom crops?".
+    // Slideshow: the picture being repositioned, and a Fit / Fill for all waiting for "Reset repositioned pictures?".
     var repositioningSlideId by remember { mutableStateOf<Long?>(null) }
     var presetForAll by remember { mutableStateOf<ScaleMode?>(null) }
     var cropBeforeReposition by remember { mutableStateOf(cropCenter) }
@@ -1165,9 +1166,6 @@ private fun EditorScreen(
                             slides = slides,
                             selectedId = selectedSlide?.id,
                             name = name,
-                            shuffle = shuffle,
-                            seconds = slideSeconds,
-                            transition = transition,
                             // (Finish repositioning first: Done or Cancel.)
                             enabled = busy == null && !repositioning,
                             thumbnailFile = { slide -> File(framesDir(slide.id), FrameFiles.frameFileName(0)) },
@@ -1184,10 +1182,7 @@ private fun EditorScreen(
                             onGallery = {
                                 slidePhotoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                             },
-                            onFiles = { slideFilePicker.launch(arrayOf("image/*")) },
-                            onShuffle = { shuffle = it },
-                            onSeconds = { slideSeconds = it },
-                            onTransition = { transition = it }
+                            onFiles = { slideFilePicker.launch(arrayOf("image/*")) }
                         )
                     } else {
                         Text(
@@ -1366,10 +1361,25 @@ private fun EditorScreen(
                         }
                     }
 
+                    // Playback: after Shape in both editors. Slideshows: time per picture, transition, Shuffle.
+                    if (slideshow) {
+                        SlideshowPlayback(
+                            slideCount = slides.size,
+                            seconds = slideSeconds,
+                            transition = transition,
+                            shuffle = shuffle,
+                            // (Finish repositioning first: Done or Cancel.)
+                            enabled = busy == null && !repositioning,
+                            onSeconds = { slideSeconds = it },
+                            onTransition = { transition = it },
+                            onShuffle = { shuffle = it }
+                        )
+                    }
                     // Speed only matters for animations, not still pictures.
                     if (!slideshow && master != null && master.frameCount > 1) {
                         Spacer(Modifier.height(24.dp))
-                        SectionTitle(stringResource(R.string.editor_speed))
+                        // "Playback", like the slideshow's section (Speed is the slider's own label).
+                        SectionTitle(stringResource(R.string.slideshow_playback))
                         SpeedPicker(speed, master, fpsCap, enabled = busy == null, onChange = { speed = it })
                     }
 
@@ -1749,17 +1759,7 @@ private fun SpeedPicker(speed: Float, frames: FrameSet, fpsCap: Int, enabled: Bo
         NumberFormat.getNumberInstance().apply { maximumFractionDigits = 2 }.format(speed)
     }
     Column(Modifier.fillMaxWidth()) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp)
-        ) {
-            Text(
-                stringResource(R.string.editor_speed_value, speedText),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.weight(1f)
-            )
+        SliderLabel(stringResource(R.string.editor_speed), stringResource(R.string.editor_speed_value, speedText)) {
             AnimatedVisibility(visible = speed != 1f) {
                 TextButton(onClick = { onChange(1f) }, enabled = enabled) {
                     Text(stringResource(R.string.editor_speed_reset))
@@ -1882,10 +1882,9 @@ private fun SpinControls(spin: Float?, enabled: Boolean, onChange: (Float?) -> U
             val index = choices.indexOfFirst { it == current }.takeIf { it >= 0 }
                 ?: choices.indices.minBy { kotlin.math.abs(choices[it] - current) }
             Column {
-                Text(
-                    stringResource(R.string.editor_spin_speed, NumberFormat.getInstance().format(current)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                SliderLabel(
+                    stringResource(R.string.editor_spin_speed),
+                    stringResource(R.string.editor_spin_speed_value, NumberFormat.getInstance().format(current))
                 )
                 Slider(
                     value = index.toFloat(),

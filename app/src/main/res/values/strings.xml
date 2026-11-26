@@ -130,8 +130,8 @@
     <string name="slideshow_fill_description">Each picture covers the whole widget. Tap Reposition on the preview to adjust the picture shown.</string>
     <string name="slideshow_picture_number_repositioned">Picture %1$d, repositioned</string>
     <plurals name="slideshow_reset_title">
-        <item quantity="one">Reset %1$d custom crop?</item>
-        <item quantity="other">Reset %1$d custom crops?</item>
+        <item quantity="one">Reset %1$d repositioned picture?</item>
+        <item quantity="other">Reset %1$d repositioned pictures?</item>
     </plurals>
     <plurals name="slideshow_reset_text">
         <item quantity="one">The picture you repositioned will go back to %1$s, like the others.</item>
@@ -260,7 +260,8 @@
     <string name="pixel_small">Small</string>
     <string name="pixel_medium">Medium</string>
     <string name="pixel_chonky">Chonky</string>
-    <string name="editor_spin_speed">Spin speed: one turn every %1$s s</string>
+    <string name="editor_spin_speed">Spin speed</string>
+    <string name="editor_spin_speed_value">One turn every %1$s s</string>
     <string name="shape_custom">Your shape</string>
     <string name="shapes_library_title">Your shapes</string>
     <string name="shapes_library_empty">No shapes yet.</string>
@@ -310,7 +311,8 @@
     </plurals>
     <string name="shapes_deleted">Shape deleted</string>
     <string name="error_shape_empty">This picture is completely white or transparent, so it can\'t cut anything.</string>
-    <string name="editor_opacity">Opacity: %1$d%%</string>
+    <string name="editor_opacity">Opacity</string>
+    <string name="editor_opacity_value">%1$d%%</string>
     <string name="color_transparent">Transparent</string>
     <string name="color_custom">Custom color</string>
     <string name="color_picker_title">Pick a color</string>

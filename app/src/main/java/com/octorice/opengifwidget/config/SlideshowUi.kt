@@ -82,6 +82,7 @@ import com.octorice.opengifwidget.data.Slide
 import com.octorice.opengifwidget.data.SlideTiming
 import com.octorice.opengifwidget.data.Transition
 import com.octorice.opengifwidget.gif.FrameFiles
+import com.octorice.opengifwidget.ui.SliderLabel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -97,7 +98,7 @@ internal const val MAX_SLIDES = 20
 /**
  * The slideshow part of the editor: name, the pictures (a grid you can reorder by long-pressing and
  * dragging; tap = show it in the preview; the shown one has a remove button), "Add pictures"
- * (Gallery / Files, several at once), then how it plays: time per picture, transition and Shuffle.
+ * (Gallery / Files, several at once). How it plays is [SlideshowPlayback], further down (after Shape).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,9 +106,6 @@ internal fun SlideshowSection(
     slides: List<Slide>,
     selectedId: Long?,
     name: String,
-    shuffle: Boolean,
-    seconds: Int,
-    transition: Transition,
     enabled: Boolean,
     thumbnailFile: (Slide) -> File,
     onName: (String) -> Unit,
@@ -116,10 +114,7 @@ internal fun SlideshowSection(
     onRemove: (Long) -> Unit,
     onMove: (from: Int, to: Int) -> Unit,
     onGallery: () -> Unit,
-    onFiles: () -> Unit,
-    onShuffle: (Boolean) -> Unit,
-    onSeconds: (Int) -> Unit,
-    onTransition: (Transition) -> Unit
+    onFiles: () -> Unit
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
@@ -192,41 +187,57 @@ internal fun SlideshowSection(
                 modifier = Modifier.fillMaxWidth()
             )
         }
+    }
+}
 
-        // How it plays (only once there's something to flip between).
-        if (slides.size > 1) {
-            Spacer(Modifier.height(24.dp))
-            SectionTitle(stringResource(R.string.slideshow_playback))
-            TimePerPicture(seconds, enabled, onSeconds)
-            // Slow mode: the picture changes while you're not looking, so there's no transition.
-            if (SlideTiming.isSlow(seconds)) {
+/**
+ * "Playback" for a slideshow (only once there's something to flip between): time per picture, the
+ * transition (not in slow mode) and Shuffle. It sits after Shape, the same place as Speed in the normal editor.
+ */
+@Composable
+internal fun SlideshowPlayback(
+    slideCount: Int,
+    seconds: Int,
+    transition: Transition,
+    shuffle: Boolean,
+    enabled: Boolean,
+    onSeconds: (Int) -> Unit,
+    onTransition: (Transition) -> Unit,
+    onShuffle: (Boolean) -> Unit
+) {
+    if (slideCount < 2) return
+    Column {
+        Spacer(Modifier.height(24.dp))
+        SectionTitle(stringResource(R.string.slideshow_playback))
+        TimePerPicture(seconds, enabled, onSeconds)
+        // Slow mode: the picture changes while you're not looking, so there's no transition.
+        if (SlideTiming.isSlow(seconds)) {
+            Text(
+                stringResource(R.string.slideshow_slow_hint, timeLabel(seconds)),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        AnimatedVisibility(visible = !SlideTiming.isSlow(seconds)) {
+            TransitionPicker(transition, enabled, onTransition)
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp)
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.slideshow_shuffle), style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    stringResource(R.string.slideshow_slow_hint, timeLabel(seconds)),
+                    stringResource(R.string.slideshow_shuffle_description),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth()
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            AnimatedVisibility(visible = !SlideTiming.isSlow(seconds)) {
-                TransitionPicker(transition, enabled, onTransition)
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp)
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.slideshow_shuffle), style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        stringResource(R.string.slideshow_shuffle_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Switch(checked = shuffle, onCheckedChange = onShuffle, enabled = enabled)
-            }
+            Spacer(Modifier.width(12.dp))
+            Switch(checked = shuffle, onCheckedChange = onShuffle, enabled = enabled)
         }
     }
 }
@@ -239,15 +250,7 @@ internal fun SlideshowSection(
 private fun TimePerPicture(seconds: Int, enabled: Boolean, onChange: (Int) -> Unit) {
     val choices = SlideTiming.CHOICES
     val index = choices.indexOf(SlideTiming.nearest(seconds))
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.slideshow_time), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-        Text(
-            timeLabel(seconds),
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary
-        )
-    }
+    SliderLabel(stringResource(R.string.slideshow_time), timeLabel(seconds))
     Slider(
         value = index.toFloat(),
         onValueChange = { onChange(choices[it.roundToInt().coerceIn(0, choices.lastIndex)]) },
@@ -492,7 +495,7 @@ private fun SlideTile(
 }
 
 /**
- * "Reset 3 custom crops?": asked before Fit / Fill for all undoes pictures you repositioned by hand.
+ * "Reset 3 repositioned pictures?": asked before Fit / Fill for all undoes pictures you repositioned by hand.
  * Nothing is saved until Save, so even Reset can still be undone by closing the editor.
  */
 @Composable
